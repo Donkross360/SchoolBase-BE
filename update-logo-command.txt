@@ -1,0 +1,6 @@
+# Run this command from your terminal (you'll need to enter your sudo password):
+sudo -u postgres psql -d schoolbase -c "UPDATE schools SET logo_url = 'https://via.placeholder.com/200x200/FF5733/FFFFFF?text=Acme+High' WHERE installation_completed = true;"
+
+# Or use this with the full path to the SQL file:
+sudo -u postgres psql -d schoolbase -f /home/don/projects/tech-writing/HNG/hngi13-stage5/SchoolBase-BE/scripts/update-logo.sql
+

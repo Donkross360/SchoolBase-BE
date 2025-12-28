@@ -1,0 +1,41 @@
+import { Module, forwardRef } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
+import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
+import { EmailModule } from '../email/email.module';
+import { InstallationCompleteGuard } from '../shared/guards/installation-complete.guard';
+import { SchoolModule } from '../school/school.module';
+
+import { SuperAdmin } from './entities/superadmin.entity';
+import { SuperadminModelAction } from './model-actions/superadmin-actions';
+import { SuperadminSessionModule } from './session/superadmin-session.module';
+import { SuperadminController } from './superadmin.controller';
+import { SuperadminService } from './superadmin.service';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([SuperAdmin]),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '15m' },
+      }),
+      inject: [ConfigService],
+    }),
+    SuperadminSessionModule,
+    EmailModule,
+    forwardRef(() => SchoolModule),
+  ],
+  controllers: [SuperadminController],
+  providers: [
+    SuperadminService,
+    SuperadminModelAction,
+    RateLimitGuard,
+    InstallationCompleteGuard,
+  ],
+  exports: [SuperadminModelAction],
+})
+export class SuperadminModule {}
