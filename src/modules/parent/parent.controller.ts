@@ -13,6 +13,7 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 
@@ -77,7 +78,7 @@ export class ParentController {
 
   // --- GET: GET MY LINKED STUDENTS (PARENT ONLY) ---
   @Get('my-students')
-  @Roles(UserRole.PARENT)
+  @Roles(UserRole.PARENT, UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiGetMyStudents()
   async getMyStudents(@Request() req): Promise<{
@@ -86,13 +87,32 @@ export class ParentController {
     data: StudentBasicDto[];
   }> {
     const parentId = req.user.parent_id;
+    const isAdmin = req.user.roles?.includes(UserRole.ADMIN);
+    
     console.log('[ParentController.getMyStudents] Request from user:', {
       userId: req.user.id,
       userEmail: req.user.email,
       parentId: parentId,
       roles: req.user.roles,
+      isAdmin,
     });
-    const data = await this.parentService.getLinkedStudents(parentId);
+    
+    // If admin accessing without parent_id, return empty array or throw error
+    if (!parentId && !isAdmin) {
+      throw new ForbiddenException('Parent ID not found. This endpoint is for parents only.');
+    }
+    
+    // If admin but no parent_id, they can't get linked students - return empty or handle differently
+    if (isAdmin && !parentId) {
+      // Admin accessing parent endpoint - return empty array
+      return {
+        message: 'No linked students. This endpoint requires a parent account.',
+        status_code: HttpStatus.OK,
+        data: [],
+      };
+    }
+    
+    const data = await this.parentService.getLinkedStudents(parentId!);
     console.log('[ParentController.getMyStudents] Returning students:', {
       parentId,
       studentCount: data.length,

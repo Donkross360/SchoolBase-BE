@@ -10,6 +10,8 @@ import { ClassTeacher } from '../../class/entities/class-teacher.entity';
 import { ClassStudent } from '../../class/entities/class-student.entity';
 import { Class } from '../../class/entities/class.entity';
 import { Student } from '../../student/entities/student.entity';
+import { Schedule } from '../../timetable/entities/schedule.entity';
+import { Timetable } from '../../timetable/entities/timetable.entity';
 import { UpdateWhiteboardDto } from '../dto/update-whiteboard.dto';
 import { Whiteboard } from '../entities/whiteboard.entity';
 import { WhiteboardModelAction } from '../model-actions/whiteboard-model-actions';
@@ -124,8 +126,12 @@ export class WhiteboardService {
 
   /**
    * Verify teacher has access to class
+   * Checks both:
+   * 1. If teacher is assigned as a class teacher
+   * 2. If teacher has any schedule for this class (teacher is scheduled to teach this class)
    */
   async verifyTeacherAccess(teacherId: string, classId: string): Promise<boolean> {
+    // Check 1: Is the teacher assigned as a class teacher?
     const classTeacher = await this.datasource.manager
       .createQueryBuilder(ClassTeacher, 'ct')
       .where('ct.class_id = :classId', { classId })
@@ -133,7 +139,21 @@ export class WhiteboardService {
       .andWhere('ct.is_active = :isActive', { isActive: true })
       .getOne();
 
-    return !!classTeacher;
+    if (classTeacher) {
+      return true;
+    }
+
+    // Check 2: Does the teacher have any schedule for this class?
+    // A teacher has access if they are scheduled to teach this class (via timetable)
+    const schedule = await this.datasource.manager
+      .createQueryBuilder(Schedule, 's')
+      .innerJoin(Timetable, 't', 't.id = s.timetable_id')
+      .where('t.class_id = :classId', { classId })
+      .andWhere('s.teacher_id = :teacherId', { teacherId })
+      .andWhere('t.is_active = :isActive', { isActive: true })
+      .getOne();
+
+    return !!schedule;
   }
 
   /**

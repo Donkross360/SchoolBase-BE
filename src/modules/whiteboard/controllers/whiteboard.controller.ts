@@ -38,28 +38,50 @@ export class WhiteboardController {
     @Request() req: any,
   ): Promise<WhiteboardResponseDto> {
     const userRoles = req.user.roles || [];
-    const isStudent = userRoles.includes(UserRole.STUDENT) && !userRoles.includes(UserRole.ADMIN);
-    const isTeacher = userRoles.includes(UserRole.TEACHER) || userRoles.includes(UserRole.ADMIN);
+    const isAdmin = userRoles.includes(UserRole.ADMIN);
+    const isStudent = userRoles.includes(UserRole.STUDENT) && !isAdmin;
+    const isTeacher = userRoles.includes(UserRole.TEACHER);
 
-    // Verify access
-    if (isStudent) {
-      const studentId = req.user.student_id;
-      if (!studentId) {
-        throw new ForbiddenException('Student ID not found in token');
+    console.log('[WhiteboardController.getByClass] Access check:', {
+      userId: req.user.id,
+      userRoles,
+      isAdmin,
+      isStudent,
+      isTeacher,
+      classId,
+    });
+
+    // Admins can access any whiteboard without verification - check this first
+    if (!isAdmin) {
+      // Only verify access if user is NOT an admin
+      if (isStudent) {
+        // Verify student access
+        const studentId = req.user.student_id;
+        if (!studentId) {
+          throw new ForbiddenException('Student ID not found in token');
+        }
+        const hasAccess = await this.whiteboardService.verifyStudentAccess(studentId, classId);
+        if (!hasAccess) {
+          throw new ForbiddenException('You do not have access to this class whiteboard');
+        }
+      } else if (isTeacher) {
+        // Verify teacher access (only if not admin)
+        const teacherId = req.user.teacher_id;
+        if (!teacherId) {
+          throw new ForbiddenException('Teacher ID not found in token');
+        }
+        const hasAccess = await this.whiteboardService.verifyTeacherAccess(teacherId, classId);
+        console.log('[WhiteboardController.getByClass] Teacher access verification:', {
+          teacherId,
+          classId,
+          hasAccess,
+        });
+        if (!hasAccess) {
+          throw new ForbiddenException('You are not assigned as a teacher for this class');
+        }
       }
-      const hasAccess = await this.whiteboardService.verifyStudentAccess(studentId, classId);
-      if (!hasAccess) {
-        throw new ForbiddenException('You do not have access to this class whiteboard');
-      }
-    } else if (isTeacher) {
-      const teacherId = req.user.teacher_id;
-      if (!teacherId) {
-        throw new ForbiddenException('Teacher ID not found in token');
-      }
-      const hasAccess = await this.whiteboardService.verifyTeacherAccess(teacherId, classId);
-      if (!hasAccess && !userRoles.includes(UserRole.ADMIN)) {
-        throw new ForbiddenException('You are not assigned as a teacher for this class');
-      }
+    } else {
+      console.log('[WhiteboardController.getByClass] Admin access granted, bypassing verification');
     }
 
     const whiteboard = await this.whiteboardService.findByClassId(classId);

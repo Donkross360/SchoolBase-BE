@@ -464,14 +464,23 @@ export class FeesService {
       termId,
     );
 
-    const { payments } = await this.paymentService.fetchAllPayments({
+    // Fetch payments for the current term (for fee breakdown calculation)
+    const { payments: termPayments } = await this.paymentService.fetchAllPayments({
       student_id: studentId,
       term_id: termId,
       limit: 1000,
     });
 
+    // Fetch ALL payments for payment history (so parents can see complete payment history)
+    const { payments: allPayments } = await this.paymentService.fetchAllPayments({
+      student_id: studentId,
+      // Don't filter by term_id to get all payments
+      limit: 1000,
+    });
+
     const feeBreakdown = fees.map((fee) => {
-      const paidForComponent = payments
+      // Use termPayments for calculating fee breakdown (only count payments for this term)
+      const paidForComponent = termPayments
         .filter((p) => p.fee_component_id === fee.id)
         .reduce((sum, p) => sum + Number(p.amount_paid), 0);
 
@@ -505,7 +514,8 @@ export class FeesService {
         session: term.academicSession?.academicYear || '',
       },
       fee_breakdown: feeBreakdown,
-      payment_history: payments.map((p) => ({
+      // Use allPayments for payment history (show all payments regardless of term)
+      payment_history: allPayments.map((p) => ({
         payment_date: p.payment_date,
         amount_paid: Number(p.amount_paid),
         payment_method: p.payment_method,

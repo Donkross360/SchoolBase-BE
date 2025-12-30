@@ -55,7 +55,15 @@ export class ClassroomMessageController {
     }
 
     const messages = await this.messageService.findByClassId(classId, userId, userRoles);
-    return messages as MessageResponseDto[];
+    
+    // Map messages to include sender names
+    return messages.map((msg) => {
+      const dto: MessageResponseDto = {
+        ...msg,
+        sender_name: this.getSenderName(msg),
+      };
+      return dto;
+    }) as MessageResponseDto[];
   }
 
   /**
@@ -93,7 +101,28 @@ export class ClassroomMessageController {
     }
 
     const message = await this.messageService.create(createDto, userId, userRoles);
-    return message as MessageResponseDto;
+    
+    // Map message to include sender name
+    const dto: MessageResponseDto = {
+      ...message,
+      sender_name: this.getSenderName(message),
+    };
+    
+    return dto;
+  }
+
+  /**
+   * Extract sender name from message entity
+   */
+  private getSenderName(message: any): string | undefined {
+    if (message.sender_type === 'teacher' && message.teacher?.user) {
+      const user = message.teacher.user;
+      return `${user.first_name || ''} ${user.last_name || ''}`.trim() || undefined;
+    } else if (message.sender_type === 'student' && message.student?.user) {
+      const user = message.student.user;
+      return `${user.first_name || ''} ${user.last_name || ''}`.trim() || undefined;
+    }
+    return undefined;
   }
 }
 

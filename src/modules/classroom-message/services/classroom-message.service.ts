@@ -11,6 +11,8 @@ import { ClassStudent } from '../../class/entities/class-student.entity';
 import { Class } from '../../class/entities/class.entity';
 import { Student } from '../../student/entities/student.entity';
 import { Teacher } from '../../teacher/entities/teacher.entity';
+import { Schedule } from '../../timetable/entities/schedule.entity';
+import { Timetable } from '../../timetable/entities/timetable.entity';
 import { UserRole } from '../../shared/enums';
 import { CreateMessageDto } from '../dto/create-message.dto';
 import { ClassroomMessage } from '../entities/classroom-message.entity';
@@ -27,15 +29,34 @@ export class ClassroomMessageService {
 
   /**
    * Verify teacher has access to class
+   * Checks both:
+   * 1. If teacher is assigned as a class teacher
+   * 2. If teacher has any schedule for this class (teacher is scheduled to teach this class)
    */
   async verifyTeacherAccess(teacherId: string, classId: string): Promise<boolean> {
+    // Check 1: Is the teacher assigned as a class teacher?
     const classTeacher = await this.datasource.manager
       .createQueryBuilder(ClassTeacher, 'ct')
-      .where('ct.teacher_id = :teacherId', { teacherId })
-      .andWhere('ct.class_id = :classId', { classId })
+      .where('ct.class_id = :classId', { classId })
+      .andWhere('ct.teacher_id = :teacherId', { teacherId })
+      .andWhere('ct.is_active = :isActive', { isActive: true })
       .getOne();
 
-    return !!classTeacher;
+    if (classTeacher) {
+      return true;
+    }
+
+    // Check 2: Does the teacher have any schedule for this class?
+    // A teacher has access if they are scheduled to teach this class (via timetable)
+    const schedule = await this.datasource.manager
+      .createQueryBuilder(Schedule, 's')
+      .innerJoin(Timetable, 't', 't.id = s.timetable_id')
+      .where('t.class_id = :classId', { classId })
+      .andWhere('s.teacher_id = :teacherId', { teacherId })
+      .andWhere('t.is_active = :isActive', { isActive: true })
+      .getOne();
+
+    return !!schedule;
   }
 
   /**
@@ -129,7 +150,19 @@ export class ClassroomMessageService {
       },
     });
 
-    return message;
+    // Fetch the message with relations to get sender name
+    const messageWithRelations = await this.messageRepository.findOne({
+      where: { id: message.id },
+      relations: [
+        'teacher',
+        'teacher.user',
+        'student',
+        'student.user',
+        'class',
+      ],
+    });
+
+    return messageWithRelations || message;
   }
 
   /**
@@ -175,9 +208,16 @@ export class ClassroomMessageService {
     }
 
     // Get all messages for this class, ordered by creation date (oldest first)
+    // Include teacher, student, and user relations to get sender names
     const messages = await this.messageRepository.find({
       where: { class_id: classId },
-      relations: ['teacher', 'student', 'class'],
+      relations: [
+        'teacher',
+        'teacher.user',
+        'student',
+        'student.user',
+        'class',
+      ],
       order: { createdAt: 'ASC' },
     });
 

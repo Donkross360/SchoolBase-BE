@@ -22,6 +22,10 @@ export class MessageResponseDto {
   @IsUUID()
   sender_id: string;
 
+  @ApiPropertyOptional({ description: 'Sender name (first name + last name)' })
+  @IsString()
+  sender_name?: string;
+
   @ApiPropertyOptional({ description: 'Text message content' })
   @IsString()
   text: string | null;
