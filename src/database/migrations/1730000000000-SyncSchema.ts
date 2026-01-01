@@ -275,38 +275,70 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE INDEX "IDX_6b4d2abab1dd082a5356bb6058" ON "fee_classes" ("class_id") `,
     );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" ADD "academic_year" character varying(50)`,
+    // Check if academic_sessions table exists before altering
+    const academicSessionsExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'academic_sessions'
+      )`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" ADD CONSTRAINT "UQ_b4b2fcff2d0dc08528c6eaa427d" UNIQUE ("academic_year")`,
+    if (academicSessionsExists[0]?.exists) {
+      await queryRunner.query(
+        `ALTER TABLE "academic_sessions" ADD "academic_year" character varying(50)`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "academic_sessions" ADD CONSTRAINT "UQ_b4b2fcff2d0dc08528c6eaa427d" UNIQUE ("academic_year")`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "academic_sessions" ADD "description" text`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "academic_sessions" ADD "deleted_at" TIMESTAMP WITH TIME ZONE`,
+      );
+    }
+
+    // Check if users table exists before altering
+    const usersTableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      )`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" ADD "description" text`,
+    if (usersTableExists[0]?.exists) {
+      await queryRunner.query(
+        `ALTER TABLE "users" ADD "google_id" character varying`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "users" ADD CONSTRAINT "UQ_0bd5012aeb82628e07f6a1be53b" UNIQUE ("google_id")`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "users" ADD "home_address" character varying`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "users" ADD "is_verified" boolean DEFAULT true`,
+      );
+      await queryRunner.query(`ALTER TABLE "users" ADD "deleted_at" TIMESTAMP`);
+      await queryRunner.query(`ALTER TABLE "users" ADD "streamId" uuid`);
+    }
+
+    // Check if sessions table exists before altering (recheck since table may have been created)
+    const sessionsTableExistsForAlter = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'sessions'
+      )`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" ADD "deleted_at" TIMESTAMP WITH TIME ZONE`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "users" ADD "google_id" character varying`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "users" ADD CONSTRAINT "UQ_0bd5012aeb82628e07f6a1be53b" UNIQUE ("google_id")`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "users" ADD "home_address" character varying`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "users" ADD "is_verified" boolean DEFAULT true`,
-    );
-    await queryRunner.query(`ALTER TABLE "users" ADD "deleted_at" TIMESTAMP`);
-    await queryRunner.query(`ALTER TABLE "users" ADD "streamId" uuid`);
-    await queryRunner.query(
-      `ALTER TABLE "sessions" ALTER COLUMN "provider" SET NOT NULL`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "sessions" ALTER COLUMN "is_active" SET NOT NULL`,
-    );
+    if (sessionsTableExistsForAlter[0]?.exists) {
+      await queryRunner.query(
+        `ALTER TABLE "sessions" ALTER COLUMN "provider" SET NOT NULL`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "sessions" ALTER COLUMN "is_active" SET NOT NULL`,
+      );
+    }
     await queryRunner.query(
       `ALTER TABLE "academic_sessions" DROP COLUMN "created_at"`,
     );

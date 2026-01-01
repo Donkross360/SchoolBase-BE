@@ -7,6 +7,19 @@ export class CreateClassroomMessagesTable1736000000000
     // Ensure uuid-ossp extension exists
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
 
+    // Check if class table exists before creating classroom_messages table with FK
+    const classTableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'class'
+      )`,
+    );
+
+    if (!classTableExists[0]?.exists) {
+      throw new Error('Cannot create classroom_messages table: class table does not exist. Please run SyncSchema migration first.');
+    }
+
     // Create classroom_messages table
     await queryRunner.createTable(
       new Table({
@@ -96,18 +109,30 @@ export class CreateClassroomMessagesTable1736000000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Drop indexes
-    await queryRunner.dropIndex(
-      'classroom_messages',
-      'IDX_classroom_messages_sender_id',
-    );
-    await queryRunner.dropIndex(
-      'classroom_messages',
-      'IDX_classroom_messages_class_id_created_at',
+    // Check if table exists before trying to drop
+    const tableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'classroom_messages'
+      )`,
     );
 
-    // Drop table
-    await queryRunner.dropTable('classroom_messages');
+    if (tableExists[0]?.exists) {
+      // Drop indexes (check if they exist first)
+      const indexes = await queryRunner.query(
+        `SELECT indexname FROM pg_indexes 
+         WHERE tablename = 'classroom_messages' 
+         AND indexname IN ('IDX_classroom_messages_sender_id', 'IDX_classroom_messages_class_id_created_at')`,
+      );
+      
+      for (const index of indexes) {
+        await queryRunner.query(`DROP INDEX IF EXISTS "${index.indexname}"`);
+      }
+
+      // Drop table
+      await queryRunner.dropTable('classroom_messages');
+    }
   }
 }
 

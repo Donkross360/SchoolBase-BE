@@ -9,6 +9,19 @@ export class AddTwoFactorAuthToUsers1732000000000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Check if users table exists before creating user_2fa table with FK
+    const usersTableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      )`,
+    );
+
+    if (!usersTableExists[0]?.exists) {
+      throw new Error('Cannot create user_2fa table: users table does not exist. Please run new_user_migration first.');
+    }
+
     await queryRunner.createTable(
       new Table({
         name: 'user_2fa',
@@ -67,13 +80,24 @@ export class AddTwoFactorAuthToUsers1732000000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    const table = await queryRunner.getTable('user_2fa');
-    const foreignKey = table?.foreignKeys.find(
-      (fk) => fk.columnNames.indexOf('user_id') !== -1,
+    // Check if table exists before trying to drop
+    const tableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user_2fa'
+      )`,
     );
-    if (foreignKey) {
-      await queryRunner.dropForeignKey('user_2fa', foreignKey);
+
+    if (tableExists[0]?.exists) {
+      const table = await queryRunner.getTable('user_2fa');
+      const foreignKey = table?.foreignKeys.find(
+        (fk) => fk.columnNames.indexOf('user_id') !== -1,
+      );
+      if (foreignKey) {
+        await queryRunner.dropForeignKey('user_2fa', foreignKey);
+      }
+      await queryRunner.dropTable('user_2fa');
     }
-    await queryRunner.dropTable('user_2fa');
   }
 }

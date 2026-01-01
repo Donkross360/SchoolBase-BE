@@ -4,6 +4,19 @@ export class CreateSessionsTable1731808800003 implements MigrationInterface {
   name = 'CreateSessionsTable1731808800003';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Check if users table exists before creating sessions table with FK
+    const usersTableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      )`,
+    );
+
+    if (!usersTableExists[0]?.exists) {
+      throw new Error('Cannot create sessions table: users table does not exist. Please run new_user_migration first.');
+    }
+
     await queryRunner.query(`
           CREATE TABLE "sessions" (
             "id" uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
