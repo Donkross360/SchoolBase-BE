@@ -4,12 +4,32 @@ export class SyncSchema1730000000000 implements MigrationInterface {
   name = 'SyncSchema1730000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE "sessions" DROP CONSTRAINT IF EXISTS "FK_sessions_user"`,
+    // Drop constraints only if tables exist
+    const sessionsTableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'sessions'
+      )`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "user_2fa" DROP CONSTRAINT IF EXISTS "FK_ed539980faac14226a05368c4d1"`,
+    if (sessionsTableExists[0]?.exists) {
+      await queryRunner.query(
+        `ALTER TABLE "sessions" DROP CONSTRAINT IF EXISTS "FK_sessions_user"`,
+      );
+    }
+
+    const user2faTableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user_2fa'
+      )`,
     );
+    if (user2faTableExists[0]?.exists) {
+      await queryRunner.query(
+        `ALTER TABLE "user_2fa" DROP CONSTRAINT IF EXISTS "FK_ed539980faac14226a05368c4d1"`,
+      );
+    }
     await queryRunner.query(`
         DO $$ BEGIN
             CREATE TYPE "public"."terms_name_enum" AS ENUM('First term', 'Second term', 'Third term');
