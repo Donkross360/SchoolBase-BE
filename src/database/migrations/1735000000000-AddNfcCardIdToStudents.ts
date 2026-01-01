@@ -4,6 +4,20 @@ export class AddNfcCardIdToStudents1735000000000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Check if students table exists first
+    const tableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'students'
+      )`,
+    );
+
+    if (!tableExists[0]?.exists) {
+      console.log('Students table does not exist yet, skipping AddNfcCardIdToStudents migration');
+      return;
+    }
+
     // Check if column already exists
     const table = await queryRunner.getTable('students');
     const columnExists = table?.findColumnByName('nfc_card_id');
@@ -40,6 +54,20 @@ export class AddNfcCardIdToStudents1735000000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    // Check if students table exists first
+    const tableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'students'
+      )`,
+    );
+
+    if (!tableExists[0]?.exists) {
+      console.log('Students table does not exist, skipping migration rollback');
+      return;
+    }
+
     // Drop indexes (IF EXISTS handles cases where they don't exist)
     await queryRunner.query(
       `DROP INDEX IF EXISTS "IDX_students_nfc_card_id_lookup"`,
