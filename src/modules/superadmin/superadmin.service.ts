@@ -155,19 +155,8 @@ export class SuperadminService {
         filterRecordOptions: { installation_completed: true },
       });
 
-      if (installations && installations.length > 0 && autoDeactivate) {
-        // Installation is complete, deactivate super admin (only if auto-deactivation is enabled)
-        await this.superadminModelAction.update({
-          identifierOptions: { id: createdSuperadmin.id },
-          updatePayload: { is_active: false },
-          transactionOptions: { useTransaction: false },
-        });
-        createdSuperadmin.is_active = false;
-        this.logger.info(
-          'Super admin deactivated after installation completion (auto-deactivation enabled)',
-        );
-
-        // Create a regular admin user account with the same credentials
+      if (installations && installations.length > 0) {
+        // Installation is complete - always create admin user account
         // This allows the user to login with the credentials they provided
         try {
           // Check if user already exists
@@ -201,6 +190,23 @@ export class SuperadminService {
           this.logger.warn(
             `Failed to create admin user account: ${userError instanceof Error ? userError.message : String(userError)}`,
             userError instanceof Error ? userError.stack : undefined,
+          );
+        }
+
+        // Deactivate super admin only if auto-deactivation is enabled
+        if (autoDeactivate) {
+          await this.superadminModelAction.update({
+            identifierOptions: { id: createdSuperadmin.id },
+            updatePayload: { is_active: false },
+            transactionOptions: { useTransaction: false },
+          });
+          createdSuperadmin.is_active = false;
+          this.logger.info(
+            'Super admin deactivated after installation completion (auto-deactivation enabled)',
+          );
+        } else {
+          this.logger.info(
+            'Super admin remains active (auto-deactivation disabled)',
           );
         }
       }

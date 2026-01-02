@@ -18,7 +18,14 @@ async function bootstrap() {
     prefix: '/uploads',
   });
 
-  app.enableCors();
+  // Configure CORS properly - allow credentials with specific origin
+  const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+  app.enableCors({
+    origin: frontendUrl,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
 
   const apiPrefix = configService.get<string>('API_PREFIX', 'api');
   const apiVersion = configService.get<string>('API_VERSION', 'v1');
