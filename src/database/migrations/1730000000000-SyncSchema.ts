@@ -587,30 +587,17 @@ export class SyncSchema1730000000000 implements MigrationInterface {
       }
     }
     
-    // Check if sessions table exists before adding constraint
-    const sessionsTableExistsForConstraint = await queryRunner.query(
-      `SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'sessions'
-      )`,
+    // Add FK constraint for sessions -> users (using addForeignKeySafely to check both tables exist)
+    await this.addForeignKeySafely(
+      queryRunner,
+      'sessions',
+      'FK_085d540d9f418cfbdc7bd55bb19',
+      'user_id',
+      'users',
+      'id',
+      'NO ACTION',
+      'NO ACTION',
     );
-    if (sessionsTableExistsForConstraint[0]?.exists) {
-      // Check if constraint doesn't already exist
-      const constraintExists = await queryRunner.query(
-        `SELECT EXISTS (
-          SELECT FROM information_schema.table_constraints 
-          WHERE table_schema = 'public' 
-          AND table_name = 'sessions' 
-          AND constraint_name = 'FK_085d540d9f418cfbdc7bd55bb19'
-        )`,
-      );
-      if (!constraintExists[0]?.exists) {
-        await queryRunner.query(
-          `ALTER TABLE "sessions" ADD CONSTRAINT "FK_085d540d9f418cfbdc7bd55bb19" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
-        );
-      }
-    }
     // Add FK constraint only if both tables exist
     // Note: academic_sessions is created by CreateAcademicSession migration (runs after this)
     const termsTableExists = await queryRunner.query(
@@ -881,35 +868,83 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "teacher_manual_checkins" ADD CONSTRAINT "FK_eebea58c9f82106ae89a059a183" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "teacher_manual_checkins" ADD CONSTRAINT "FK_2850e375fae7c171e43939f9025" FOREIGN KEY ("reviewed_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for teacher_manual_checkins -> users
+    await this.addForeignKeySafely(
+      queryRunner,
+      'teacher_manual_checkins',
+      'FK_2850e375fae7c171e43939f9025',
+      'reviewed_by',
+      'users',
+      'id',
+      'NO ACTION',
+      'NO ACTION',
     );
     await queryRunner.query(
       `ALTER TABLE "teacher_daily_attendance" ADD CONSTRAINT "FK_e9813fac28685a38416f693067d" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "teacher_daily_attendance" ADD CONSTRAINT "FK_1f6c2d71ef0620300c1bb616a94" FOREIGN KEY ("marked_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for teacher_daily_attendance -> users
+    await this.addForeignKeySafely(
+      queryRunner,
+      'teacher_daily_attendance',
+      'FK_1f6c2d71ef0620300c1bb616a94',
+      'marked_by',
+      'users',
+      'id',
+      'NO ACTION',
+      'NO ACTION',
     );
     await queryRunner.query(
       `ALTER TABLE "student_daily_attendance" ADD CONSTRAINT "FK_a2f3d140138e4b0ae2ad79a2949" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "student_daily_attendance" ADD CONSTRAINT "FK_ad357d3f27de39e5494aadcbaff" FOREIGN KEY ("marked_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for student_daily_attendance -> users
+    await this.addForeignKeySafely(
+      queryRunner,
+      'student_daily_attendance',
+      'FK_ad357d3f27de39e5494aadcbaff',
+      'marked_by',
+      'users',
+      'id',
+      'NO ACTION',
+      'NO ACTION',
     );
     await queryRunner.query(
       `ALTER TABLE "student_daily_attendance" ADD CONSTRAINT "FK_0d76bd8d24058e1f0cb521311f3" FOREIGN KEY ("class_id") REFERENCES "class"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "attendance_edit_requests" ADD CONSTRAINT "FK_5ec84a04f80d8b880ba243f217f" FOREIGN KEY ("requested_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for attendance_edit_requests -> users (requested_by)
+    await this.addForeignKeySafely(
+      queryRunner,
+      'attendance_edit_requests',
+      'FK_5ec84a04f80d8b880ba243f217f',
+      'requested_by',
+      'users',
+      'id',
+      'NO ACTION',
+      'NO ACTION',
     );
-    await queryRunner.query(
-      `ALTER TABLE "attendance_edit_requests" ADD CONSTRAINT "FK_25c041560d101752a1415a5b09d" FOREIGN KEY ("reviewed_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for attendance_edit_requests -> users (reviewed_by)
+    await this.addForeignKeySafely(
+      queryRunner,
+      'attendance_edit_requests',
+      'FK_25c041560d101752a1415a5b09d',
+      'reviewed_by',
+      'users',
+      'id',
+      'NO ACTION',
+      'NO ACTION',
     );
     await queryRunner.query(
       `ALTER TABLE "attendance_records" ADD CONSTRAINT "FK_dbace05c012526710663f8d8911" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "attendance_records" ADD CONSTRAINT "FK_48234156b97562091d6f90f40f9" FOREIGN KEY ("marked_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for attendance_records -> users
+    await this.addForeignKeySafely(
+      queryRunner,
+      'attendance_records',
+      'FK_48234156b97562091d6f90f40f9',
+      'marked_by',
+      'users',
+      'id',
+      'NO ACTION',
+      'NO ACTION',
     );
     await queryRunner.query(
       `ALTER TABLE "attendance_records" ADD CONSTRAINT "FK_0dfe6d219c4a7a162ca0f84243c" FOREIGN KEY ("schedule_id") REFERENCES "schedules"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
