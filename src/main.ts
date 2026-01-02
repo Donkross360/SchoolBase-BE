@@ -25,7 +25,7 @@ async function bootstrap() {
   const globalPrefix = `${apiPrefix}/${apiVersion}`;
 
   app.setGlobalPrefix(globalPrefix, {
-    exclude: ['docs'],
+    exclude: ['docs', 'health'],
   });
 
   // Validation
