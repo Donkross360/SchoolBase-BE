@@ -718,11 +718,27 @@ export class SyncSchema1730000000000 implements MigrationInterface {
       'academic_sessions',
       'id',
     );
-    await queryRunner.query(
-      `ALTER TABLE "stream" ADD CONSTRAINT "FK_670f7496ebbd8029b00e80841e7" FOREIGN KEY ("class_id") REFERENCES "class"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    // Add FK constraint for stream -> class
+    await this.addForeignKeySafely(
+      queryRunner,
+      'stream',
+      'FK_670f7496ebbd8029b00e80841e7',
+      'class_id',
+      'class',
+      'id',
+      'CASCADE',
+      'NO ACTION',
     );
-    await queryRunner.query(
-      `ALTER TABLE "users" ADD CONSTRAINT "FK_969b3e450b298cc8c6be9028caf" FOREIGN KEY ("streamId") REFERENCES "stream"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for users -> stream
+    await this.addForeignKeySafely(
+      queryRunner,
+      'users',
+      'FK_969b3e450b298cc8c6be9028caf',
+      'streamId',
+      'stream',
+      'id',
+      'NO ACTION',
+      'NO ACTION',
     );
     await queryRunner.query(
       `ALTER TABLE "teacher_subjects" ADD CONSTRAINT "FK_6675136306b9111126bbdbbaba7" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
