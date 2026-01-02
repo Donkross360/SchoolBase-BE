@@ -117,6 +117,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       exception &&
       typeof exception === 'object' &&
       'response' in exception &&
+      typeof (exception as IValidationError).response === 'object' &&
+      (exception as IValidationError).response !== null &&
       ('message' in (exception as IValidationError).response ||
         'status' in exception)
     ) {
@@ -146,10 +148,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const isEmailError = 
         errorCode === 'ESOCKET' ||
         errorCode === 'ECONNREFUSED' ||
+        errorCode === 'EAUTH' ||
+        errorCode === 'ETIMEDOUT' ||
         errorMessage.includes('127.0.0.1:587') ||
         errorMessage.includes('SMTP') ||
+        errorMessage.includes('authentication failed') ||
+        errorMessage.includes('Email') ||
         errorStack.includes('127.0.0.1:587') ||
-        errorStack.includes('ECONNREFUSED');
+        errorStack.includes('ECONNREFUSED') ||
+        errorStack.includes('smtp-connection') ||
+        errorStack.includes('nodemailer');
       
       if (isEmailError) {
         status = HttpStatus.INTERNAL_SERVER_ERROR;
