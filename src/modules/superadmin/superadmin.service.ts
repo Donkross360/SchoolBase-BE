@@ -19,6 +19,8 @@ import config from '../../config/config';
 import * as sysMsg from '../../constants/system.messages';
 import { EmailService } from '../email/email.service';
 import { SchoolModelAction } from '../school/model-actions/school.action';
+import { UserService } from '../user/user.service';
+import { CreateUserDto, UserRole } from '../user/dto/create-user.dto';
 
 import { CreateSuperadminDto } from './dto/create-superadmin.dto';
 import { LoginSuperadminDto } from './dto/login-superadmin.dto';
@@ -40,6 +42,8 @@ export class SuperadminService {
     private readonly superadminSessionService: SuperadminSessionService,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => UserService))
+    private readonly userService: UserService,
   ) {
     this.logger = logger.child({ context: SuperadminService.name });
   }
@@ -142,15 +146,17 @@ export class SuperadminService {
     const createdSuperadmin =
       await this.dataSource.transaction(createNewRecord);
 
-    // Check if installation is completed and deactivate super admin
-    // This ensures super admin access is disabled after setup
+    // Check if installation is completed and optionally deactivate super admin
+    // Auto-deactivation can be disabled via AUTO_DEACTIVATE_SUPERADMIN env var (default: false)
+    const autoDeactivate = this.configService.get<string>('AUTO_DEACTIVATE_SUPERADMIN', 'false') === 'true';
+    
     try {
       const { payload: installations } = await this.schoolModelAction.list({
         filterRecordOptions: { installation_completed: true },
       });
 
-      if (installations && installations.length > 0) {
-        // Installation is complete, deactivate super admin
+      if (installations && installations.length > 0 && autoDeactivate) {
+        // Installation is complete, deactivate super admin (only if auto-deactivation is enabled)
         await this.superadminModelAction.update({
           identifierOptions: { id: createdSuperadmin.id },
           updatePayload: { is_active: false },
@@ -158,8 +164,45 @@ export class SuperadminService {
         });
         createdSuperadmin.is_active = false;
         this.logger.info(
-          'Super admin deactivated after installation completion',
+          'Super admin deactivated after installation completion (auto-deactivation enabled)',
         );
+
+        // Create a regular admin user account with the same credentials
+        // This allows the user to login with the credentials they provided
+        try {
+          // Check if user already exists
+          const existingUser = await this.userService.findByEmail(createSuperadminDto.email);
+          if (!existingUser) {
+            // Hash the password (same as superadmin)
+            const passwordHash: string = await bcrypt.hash(createSuperadminDto.password, 10);
+            const adminUserDto: CreateUserDto = {
+              first_name: createSuperadminDto.first_name,
+              last_name: createSuperadminDto.last_name,
+              email: createSuperadminDto.email,
+              password: passwordHash,
+              role: [UserRole.ADMIN],
+              gender: 'OTHER', // Default since not provided in superadmin DTO
+              dob: new Date().toISOString().split('T')[0], // Default to today
+              phone: '', // Default empty since not provided
+              is_active: true,
+              is_verified: true,
+            };
+            await this.userService.create(adminUserDto);
+            this.logger.info(
+              `Admin user account created for ${createSuperadminDto.email}`,
+            );
+          } else {
+            this.logger.info(
+              `User account already exists for ${createSuperadminDto.email}, skipping creation`,
+            );
+          }
+        } catch (userError) {
+          // Log error but don't fail superadmin creation
+          this.logger.warn(
+            `Failed to create admin user account: ${userError instanceof Error ? userError.message : String(userError)}`,
+            userError instanceof Error ? userError.stack : undefined,
+          );
+        }
       }
     } catch (error) {
       // If school module is not available, log warning but don't fail
