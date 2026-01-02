@@ -3,6 +3,59 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class SyncSchema1730000000000 implements MigrationInterface {
   name = 'SyncSchema1730000000000';
 
+  /**
+   * Helper function to safely add foreign key constraint
+   * Only adds if both source and referenced tables exist, and constraint doesn't already exist
+   */
+  private async addForeignKeySafely(
+    queryRunner: QueryRunner,
+    tableName: string,
+    constraintName: string,
+    columnName: string,
+    referencedTable: string,
+    referencedColumn: string,
+    onDelete: string = 'NO ACTION',
+    onUpdate: string = 'NO ACTION',
+  ): Promise<void> {
+    // Check if source table exists
+    const sourceTableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = '${tableName}'
+      )`,
+    );
+
+    // Check if referenced table exists
+    const referencedTableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = '${referencedTable}'
+      )`,
+    );
+
+    if (!sourceTableExists[0]?.exists || !referencedTableExists[0]?.exists) {
+      return; // Skip if either table doesn't exist
+    }
+
+    // Check if constraint already exists
+    const constraintExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.table_constraints 
+        WHERE table_schema = 'public' 
+        AND table_name = '${tableName}'
+        AND constraint_name = '${constraintName}'
+      )`,
+    );
+
+    if (!constraintExists[0]?.exists) {
+      await queryRunner.query(
+        `ALTER TABLE "${tableName}" ADD CONSTRAINT "${constraintName}" FOREIGN KEY ("${columnName}") REFERENCES "${referencedTable}"("${referencedColumn}") ON DELETE ${onDelete} ON UPDATE ${onUpdate}`,
+      );
+    }
+  }
+
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Drop constraints only if tables exist
     const sessionsTableExists = await queryRunner.query(
@@ -32,248 +85,248 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     }
     await queryRunner.query(`
         DO $$ BEGIN
-            CREATE TYPE "public"."terms_name_enum" AS ENUM('First term', 'Second term', 'Third term');
+            CREATE TYPE IF NOT EXISTS "public"."terms_name_enum" AS ENUM('First term', 'Second term', 'Third term');
         EXCEPTION
             WHEN duplicate_object THEN null;
         END $$;
         `);
     await queryRunner.query(`
         DO $$ BEGIN
-            CREATE TYPE "public"."terms_status_enum" AS ENUM('Active', 'Inactive');
+            CREATE TYPE IF NOT EXISTS "public"."terms_status_enum" AS ENUM('Active', 'Inactive');
         EXCEPTION
             WHEN duplicate_object THEN null;
         END $$;
         `);
     await queryRunner.query(
-      `CREATE TABLE "terms" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "session_id" uuid NOT NULL, "name" "public"."terms_name_enum" NOT NULL, "start_date" date NOT NULL, "end_date" date NOT NULL, "status" "public"."terms_status_enum" NOT NULL DEFAULT 'Active', "is_current" boolean NOT NULL DEFAULT false, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_33b6fe77d6ace7ff43cc8a65958" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "terms" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "session_id" uuid NOT NULL, "name" "public"."terms_name_enum" NOT NULL, "start_date" date NOT NULL, "end_date" date NOT NULL, "status" "public"."terms_status_enum" NOT NULL DEFAULT 'Active', "is_current" boolean NOT NULL DEFAULT false, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_33b6fe77d6ace7ff43cc8a65958" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "rooms" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying(255) NOT NULL, "type" character varying(255) NOT NULL, "capacity" integer NOT NULL, "location" character varying(255) NOT NULL, CONSTRAINT "UQ_48b79438f8707f3d9ca83d85ea0" UNIQUE ("name"), CONSTRAINT "PK_0368a2d7c215f2d0458a54933f2" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "rooms" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying(255) NOT NULL, "type" character varying(255) NOT NULL, "capacity" integer NOT NULL, "location" character varying(255) NOT NULL, CONSTRAINT "UQ_48b79438f8707f3d9ca83d85ea0" UNIQUE ("name"), CONSTRAINT "PK_0368a2d7c215f2d0458a54933f2" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "class_teachers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "session_id" character varying NOT NULL, "assignment_date" TIMESTAMP NOT NULL DEFAULT now(), "is_active" boolean NOT NULL DEFAULT true, "class_id" uuid, "teacher_id" uuid, CONSTRAINT "PK_af6f6d3e46a2ac73959f65f3d9a" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "class_teachers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "session_id" character varying NOT NULL, "assignment_date" TIMESTAMP NOT NULL DEFAULT now(), "is_active" boolean NOT NULL DEFAULT true, "class_id" uuid, "teacher_id" uuid, CONSTRAINT "PK_af6f6d3e46a2ac73959f65f3d9a" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "parents" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "user_id" uuid NOT NULL, "photo_url" character varying, "is_active" boolean NOT NULL DEFAULT true, "deleted_at" TIMESTAMP, CONSTRAINT "UQ_c94c3cea9b43a18c81269ded41d" UNIQUE ("user_id"), CONSTRAINT "REL_c94c3cea9b43a18c81269ded41" UNIQUE ("user_id"), CONSTRAINT "PK_9a4dc67c7b8e6a9cb918938d353" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "parents" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "user_id" uuid NOT NULL, "photo_url" character varying, "is_active" boolean NOT NULL DEFAULT true, "deleted_at" TIMESTAMP, CONSTRAINT "UQ_c94c3cea9b43a18c81269ded41d" UNIQUE ("user_id"), CONSTRAINT "REL_c94c3cea9b43a18c81269ded41" UNIQUE ("user_id"), CONSTRAINT "PK_9a4dc67c7b8e6a9cb918938d353" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "students" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "registration_number" character varying NOT NULL, "photo_url" character varying, "current_class_id" uuid, "is_deleted" boolean NOT NULL DEFAULT false, "deleted_at" TIMESTAMP, "user_id" uuid, "stream_id" uuid, "parent_id" uuid, CONSTRAINT "UQ_82946fdb5652b83cacb81e9083e" UNIQUE ("registration_number"), CONSTRAINT "REL_fb3eff90b11bddf7285f9b4e28" UNIQUE ("user_id"), CONSTRAINT "PK_7d7f07271ad4ce999880713f05e" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "students" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "registration_number" character varying NOT NULL, "photo_url" character varying, "current_class_id" uuid, "is_deleted" boolean NOT NULL DEFAULT false, "deleted_at" TIMESTAMP, "user_id" uuid, "stream_id" uuid, "parent_id" uuid, CONSTRAINT "UQ_82946fdb5652b83cacb81e9083e" UNIQUE ("registration_number"), CONSTRAINT "REL_fb3eff90b11bddf7285f9b4e28" UNIQUE ("user_id"), CONSTRAINT "PK_7d7f07271ad4ce999880713f05e" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_77329d8dd9e1d16f58ad7ad0b3" ON "students" ("current_class_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_77329d8dd9e1d16f58ad7ad0b3" ON "students" ("current_class_id") `,
     );
     await queryRunner.query(
-      `CREATE TABLE "class_students" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "session_id" character varying NOT NULL, "enrollment_date" TIMESTAMP NOT NULL DEFAULT now(), "is_active" boolean NOT NULL DEFAULT true, "class_id" uuid, "student_id" uuid, CONSTRAINT "PK_f1ef7a4fd2eabf7ef3c6bc7cae3" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "class_students" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "session_id" character varying NOT NULL, "enrollment_date" TIMESTAMP NOT NULL DEFAULT now(), "is_active" boolean NOT NULL DEFAULT true, "class_id" uuid, "student_id" uuid, CONSTRAINT "PK_f1ef7a4fd2eabf7ef3c6bc7cae3" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."teachers_title_enum" AS ENUM('Mr', 'Mrs', 'Miss', 'Dr', 'Prof')`,
+      `CREATE TYPE IF NOT EXISTS "public"."teachers_title_enum" AS ENUM('Mr', 'Mrs', 'Miss', 'Dr', 'Prof')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "teachers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "user_id" uuid NOT NULL, "employment_id" character varying NOT NULL, "title" "public"."teachers_title_enum" NOT NULL, "photo_url" character varying, "is_active" boolean NOT NULL DEFAULT true, CONSTRAINT "UQ_4668d4752e6766682d1be0b346f" UNIQUE ("user_id"), CONSTRAINT "UQ_8e683bfa0a4320b135683e5e054" UNIQUE ("employment_id"), CONSTRAINT "REL_4668d4752e6766682d1be0b346" UNIQUE ("user_id"), CONSTRAINT "PK_a8d4f83be3abe4c687b0a0093c8" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "teachers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "user_id" uuid NOT NULL, "employment_id" character varying NOT NULL, "title" "public"."teachers_title_enum" NOT NULL, "photo_url" character varying, "is_active" boolean NOT NULL DEFAULT true, CONSTRAINT "UQ_4668d4752e6766682d1be0b346f" UNIQUE ("user_id"), CONSTRAINT "UQ_8e683bfa0a4320b135683e5e054" UNIQUE ("employment_id"), CONSTRAINT "REL_4668d4752e6766682d1be0b346" UNIQUE ("user_id"), CONSTRAINT "PK_a8d4f83be3abe4c687b0a0093c8" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "class_subjects" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_assignment_date" TIMESTAMP, "class_id" uuid NOT NULL, "subject_id" uuid NOT NULL, "teacher_id" uuid, CONSTRAINT "UQ_bd863400a0b317b7e43118a970b" UNIQUE ("class_id", "subject_id"), CONSTRAINT "PK_4e1ecabd8771166a29291dc09ed" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "class_subjects" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_assignment_date" TIMESTAMP, "class_id" uuid NOT NULL, "subject_id" uuid NOT NULL, "teacher_id" uuid, CONSTRAINT "UQ_bd863400a0b317b7e43118a970b" UNIQUE ("class_id", "subject_id"), CONSTRAINT "PK_4e1ecabd8771166a29291dc09ed" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "subjects" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying(255) NOT NULL, CONSTRAINT "UQ_47a287fe64bd0e1027e603c335c" UNIQUE ("name"), CONSTRAINT "UQ_47a287fe64bd0e1027e603c335c" UNIQUE ("name"), CONSTRAINT "PK_1a023685ac2b051b4e557b0b280" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "subjects" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying(255) NOT NULL, CONSTRAINT "UQ_47a287fe64bd0e1027e603c335c" UNIQUE ("name"), CONSTRAINT "UQ_47a287fe64bd0e1027e603c335c" UNIQUE ("name"), CONSTRAINT "PK_1a023685ac2b051b4e557b0b280" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."schedules_day_enum" AS ENUM('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY')`,
+      `CREATE TYPE IF NOT EXISTS "public"."schedules_day_enum" AS ENUM('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY')`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."schedules_period_type_enum" AS ENUM('ACADEMICS', 'BREAK')`,
+      `CREATE TYPE IF NOT EXISTS "public"."schedules_period_type_enum" AS ENUM('ACADEMICS', 'BREAK')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "schedules" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "day" "public"."schedules_day_enum" NOT NULL, "start_time" TIME NOT NULL, "end_time" TIME NOT NULL, "period_type" "public"."schedules_period_type_enum" NOT NULL DEFAULT 'ACADEMICS', "room_id" uuid, "timetable_id" uuid NOT NULL, "subject_id" uuid, "teacher_id" uuid, CONSTRAINT "PK_7e33fc2ea755a5765e3564e66dd" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "schedules" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "day" "public"."schedules_day_enum" NOT NULL, "start_time" TIME NOT NULL, "end_time" TIME NOT NULL, "period_type" "public"."schedules_period_type_enum" NOT NULL DEFAULT 'ACADEMICS', "room_id" uuid, "timetable_id" uuid NOT NULL, "subject_id" uuid, "teacher_id" uuid, CONSTRAINT "PK_7e33fc2ea755a5765e3564e66dd" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "timetables" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "class_id" uuid NOT NULL, "is_active" boolean NOT NULL DEFAULT true, CONSTRAINT "REL_54d3ddcc757a7639a1ca4ea159" UNIQUE ("class_id"), CONSTRAINT "PK_9dd7e50645bff59e9ac5b4725c0" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "timetables" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "class_id" uuid NOT NULL, "is_active" boolean NOT NULL DEFAULT true, CONSTRAINT "REL_54d3ddcc757a7639a1ca4ea159" UNIQUE ("class_id"), CONSTRAINT "PK_9dd7e50645bff59e9ac5b4725c0" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "class" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying NOT NULL, "stream" character varying, "arm" character varying, "is_deleted" boolean NOT NULL DEFAULT false, "deleted_at" TIMESTAMP, "academic_session_id" uuid NOT NULL, CONSTRAINT "UQ_8bd096a7175df0d7ad14e805b46" UNIQUE ("name", "arm", "academic_session_id"), CONSTRAINT "PK_0b9024d21bdfba8b1bd1c300eae" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "class" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying NOT NULL, "stream" character varying, "arm" character varying, "is_deleted" boolean NOT NULL DEFAULT false, "deleted_at" TIMESTAMP, "academic_session_id" uuid NOT NULL, CONSTRAINT "UQ_8bd096a7175df0d7ad14e805b46" UNIQUE ("name", "arm", "academic_session_id"), CONSTRAINT "PK_0b9024d21bdfba8b1bd1c300eae" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "stream" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying(100) NOT NULL, "class_id" uuid NOT NULL, CONSTRAINT "UQ_88a6010af8d39ff0573a2e2d297" UNIQUE ("class_id", "name"), CONSTRAINT "PK_0dc9d7e04ff213c08a096f835f2" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "stream" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying(100) NOT NULL, "class_id" uuid NOT NULL, CONSTRAINT "UQ_88a6010af8d39ff0573a2e2d297" UNIQUE ("class_id", "name"), CONSTRAINT "PK_0dc9d7e04ff213c08a096f835f2" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_670f7496ebbd8029b00e80841e" ON "stream" ("class_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_670f7496ebbd8029b00e80841e" ON "stream" ("class_id") `,
     );
     await queryRunner.query(
-      `CREATE TABLE "teacher_subjects" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "subject_id" uuid NOT NULL, "class_id" character varying, "is_active" boolean NOT NULL DEFAULT true, "notes" text, CONSTRAINT "UQ_9e05964fe6f2598b643470c2067" UNIQUE ("teacher_id", "subject_id"), CONSTRAINT "PK_9f5ee8b3beb5c7c1ea50a8d7908" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "teacher_subjects" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "subject_id" uuid NOT NULL, "class_id" character varying, "is_active" boolean NOT NULL DEFAULT true, "notes" text, CONSTRAINT "UQ_9e05964fe6f2598b643470c2067" UNIQUE ("teacher_id", "subject_id"), CONSTRAINT "PK_9f5ee8b3beb5c7c1ea50a8d7908" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "teacher_profiles" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_uid" character varying NOT NULL, "user_id" integer NOT NULL, "first_name" character varying NOT NULL, "last_name" character varying NOT NULL, CONSTRAINT "UQ_663fbeaaa7b4db3242cbda8767c" UNIQUE ("teacher_uid"), CONSTRAINT "PK_fdd17d62015e40674217a407484" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "teacher_profiles" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_uid" character varying NOT NULL, "user_id" integer NOT NULL, "first_name" character varying NOT NULL, "last_name" character varying NOT NULL, CONSTRAINT "UQ_663fbeaaa7b4db3242cbda8767c" UNIQUE ("teacher_uid"), CONSTRAINT "PK_fdd17d62015e40674217a407484" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."superadmin_role_enum" AS ENUM('SUPERADMIN')`,
+      `CREATE TYPE IF NOT EXISTS "public"."superadmin_role_enum" AS ENUM('SUPERADMIN')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "superadmin" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "first_name" character varying(50) NOT NULL, "last_name" character varying(50) NOT NULL, "email" character varying NOT NULL, "school_name" character varying(255) NOT NULL, "password" character varying, "is_active" boolean NOT NULL DEFAULT false, "reset_token" character varying, "reset_token_expiration" date, "role" "public"."superadmin_role_enum" NOT NULL DEFAULT 'SUPERADMIN', CONSTRAINT "UQ_00b221dab05a330bb5f6c4b3d6b" UNIQUE ("email"), CONSTRAINT "PK_34da9117b572e9b32a8d829ae84" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "superadmin" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "first_name" character varying(50) NOT NULL, "last_name" character varying(50) NOT NULL, "email" character varying NOT NULL, "school_name" character varying(255) NOT NULL, "password" character varying, "is_active" boolean NOT NULL DEFAULT false, "reset_token" character varying, "reset_token_expiration" date, "role" "public"."superadmin_role_enum" NOT NULL DEFAULT 'SUPERADMIN', CONSTRAINT "UQ_00b221dab05a330bb5f6c4b3d6b" UNIQUE ("email"), CONSTRAINT "PK_34da9117b572e9b32a8d829ae84" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "superadmin_sessions" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "superadmin_id" uuid NOT NULL, "expires_at" TIMESTAMP NOT NULL, "refresh_token" text NOT NULL, "provider" character varying NOT NULL DEFAULT 'jwt', "is_active" boolean NOT NULL DEFAULT true, "revoked_at" TIMESTAMP, CONSTRAINT "PK_1364d3735b0efcbb44b56d0c347" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "superadmin_sessions" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "superadmin_id" uuid NOT NULL, "expires_at" TIMESTAMP NOT NULL, "refresh_token" text NOT NULL, "provider" character varying NOT NULL DEFAULT 'jwt', "is_active" boolean NOT NULL DEFAULT true, "revoked_at" TIMESTAMP, CONSTRAINT "PK_1364d3735b0efcbb44b56d0c347" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "session" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "userId" uuid NOT NULL, "isActive" boolean NOT NULL DEFAULT true, "expiresAt" TIMESTAMP NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "PK_f55da76ac1c3ac420f444d2ff11" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "session" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "userId" uuid NOT NULL, "isActive" boolean NOT NULL DEFAULT true, "expiresAt" TIMESTAMP NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "PK_f55da76ac1c3ac420f444d2ff11" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "schools" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying(150) NOT NULL, "address" character varying(255), "logo_url" character varying, "email" character varying, "phone" character varying(20), "primary_color" character varying, "secondary_color" character varying, "accent_color" character varying, "installation_completed" boolean NOT NULL DEFAULT false, "database_url" text, CONSTRAINT "UQ_74a5374cf6d1c970dd47f888bf6" UNIQUE ("email"), CONSTRAINT "PK_95b932e47ac129dd8e23a0db548" PRIMARY KEY ("id")); COMMENT ON COLUMN "schools"."database_url" IS 'Dedicated DB connection'`,
+      `CREATE TABLE IF NOT EXISTS "schools" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying(150) NOT NULL, "address" character varying(255), "logo_url" character varying, "email" character varying, "phone" character varying(20), "primary_color" character varying, "secondary_color" character varying, "accent_color" character varying, "installation_completed" boolean NOT NULL DEFAULT false, "database_url" text, CONSTRAINT "UQ_74a5374cf6d1c970dd47f888bf6" UNIQUE ("email"), CONSTRAINT "PK_95b932e47ac129dd8e23a0db548" PRIMARY KEY ("id")); COMMENT ON COLUMN "schools"."database_url" IS 'Dedicated DB connection'`,
     );
     await queryRunner.query(
-      `CREATE TABLE "result_subject_lines" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "result_id" uuid NOT NULL, "subject_id" uuid NOT NULL, "ca_score" numeric(5,2), "exam_score" numeric(5,2), "total_score" numeric(5,2), "grade_letter" character varying(2), "remark" text, CONSTRAINT "PK_e61cbdf14035df7bc1da89aefe8" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "result_subject_lines" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "result_id" uuid NOT NULL, "subject_id" uuid NOT NULL, "ca_score" numeric(5,2), "exam_score" numeric(5,2), "total_score" numeric(5,2), "grade_letter" character varying(2), "remark" text, CONSTRAINT "PK_e61cbdf14035df7bc1da89aefe8" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "results" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "class_id" uuid NOT NULL, "term_id" uuid NOT NULL, "academic_session_id" uuid NOT NULL, "total_score" numeric(8,2), "average_score" numeric(5,2), "grade_letter" character varying(2), "position" integer, "remark" text, "subject_count" integer NOT NULL DEFAULT '0', "generated_at" TIMESTAMP, CONSTRAINT "UQ_d02acaf6de1d96fa51fd8711281" UNIQUE ("student_id", "class_id", "term_id", "academic_session_id"), CONSTRAINT "PK_e8f2a9191c61c15b627c117a678" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "results" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "class_id" uuid NOT NULL, "term_id" uuid NOT NULL, "academic_session_id" uuid NOT NULL, "total_score" numeric(8,2), "average_score" numeric(5,2), "grade_letter" character varying(2), "position" integer, "remark" text, "subject_count" integer NOT NULL DEFAULT '0', "generated_at" TIMESTAMP, CONSTRAINT "UQ_d02acaf6de1d96fa51fd8711281" UNIQUE ("student_id", "class_id", "term_id", "academic_session_id"), CONSTRAINT "PK_e8f2a9191c61c15b627c117a678" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "fee_assignments" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "fee_id" uuid NOT NULL, "student_id" uuid NOT NULL, CONSTRAINT "PK_5d52331b84e42c325461e73d798" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "fee_assignments" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "fee_id" uuid NOT NULL, "student_id" uuid NOT NULL, CONSTRAINT "PK_5d52331b84e42c325461e73d798" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."fees_status_enum" AS ENUM('ACTIVE', 'INACTIVE')`,
+      `CREATE TYPE IF NOT EXISTS "public"."fees_status_enum" AS ENUM('ACTIVE', 'INACTIVE')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "fees" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "component_name" character varying NOT NULL, "description" character varying, "amount" numeric(12,2) NOT NULL, "term_id" uuid NOT NULL, "status" "public"."fees_status_enum" NOT NULL DEFAULT 'ACTIVE', "created_by" uuid, CONSTRAINT "PK_97f3a1b1b8ee5674fd4da93f461" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "fees" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "component_name" character varying NOT NULL, "description" character varying, "amount" numeric(12,2) NOT NULL, "term_id" uuid NOT NULL, "status" "public"."fees_status_enum" NOT NULL DEFAULT 'ACTIVE', "created_by" uuid, CONSTRAINT "PK_97f3a1b1b8ee5674fd4da93f461" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."payments_payment_method_enum" AS ENUM('cash', 'bank_transfer', 'card', 'mobile_money', 'cheque')`,
+      `CREATE TYPE IF NOT EXISTS "public"."payments_payment_method_enum" AS ENUM('cash', 'bank_transfer', 'card', 'mobile_money', 'cheque')`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."payments_status_enum" AS ENUM('paid', 'pending', 'overdue')`,
+      `CREATE TYPE IF NOT EXISTS "public"."payments_status_enum" AS ENUM('paid', 'pending', 'overdue')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "payments" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "fee_component_id" uuid NOT NULL, "amount_paid" numeric(12,2) NOT NULL, "payment_method" "public"."payments_payment_method_enum" NOT NULL, "payment_date" TIMESTAMP NOT NULL, "term_id" uuid NOT NULL, "session_id" uuid NOT NULL, "invoice_number" character varying, "transaction_id" character varying, "receipt_url" character varying, "status" "public"."payments_status_enum" NOT NULL DEFAULT 'paid', "recorded_by" uuid NOT NULL, CONSTRAINT "PK_197ab7af18c93fbb0c9b28b4a59" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "payments" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "fee_component_id" uuid NOT NULL, "amount_paid" numeric(12,2) NOT NULL, "payment_method" "public"."payments_payment_method_enum" NOT NULL, "payment_date" TIMESTAMP NOT NULL, "term_id" uuid NOT NULL, "session_id" uuid NOT NULL, "invoice_number" character varying, "transaction_id" character varying, "receipt_url" character varying, "status" "public"."payments_status_enum" NOT NULL DEFAULT 'paid', "recorded_by" uuid NOT NULL, CONSTRAINT "PK_197ab7af18c93fbb0c9b28b4a59" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."notifications_type_enum" AS ENUM('ACADEMIC_UPDATE', 'RESULT_ALERT', 'TIMETABLE_CHANGE', 'FEE_UPDATE', 'SYSTEM_ALERT')`,
+      `CREATE TYPE IF NOT EXISTS "public"."notifications_type_enum" AS ENUM('ACADEMIC_UPDATE', 'RESULT_ALERT', 'TIMETABLE_CHANGE', 'FEE_UPDATE', 'SYSTEM_ALERT')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "notifications" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "recipient_id" character varying NOT NULL, "title" character varying NOT NULL, "message" text NOT NULL, "type" "public"."notifications_type_enum" NOT NULL DEFAULT 'SYSTEM_ALERT', "is_read" boolean NOT NULL DEFAULT false, "metadata" jsonb, CONSTRAINT "PK_6a72c3c0f683f6462415e653c3a" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "notifications" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "recipient_id" character varying NOT NULL, "title" character varying NOT NULL, "message" text NOT NULL, "type" "public"."notifications_type_enum" NOT NULL DEFAULT 'SYSTEM_ALERT', "is_read" boolean NOT NULL DEFAULT false, "metadata" jsonb, CONSTRAINT "PK_6a72c3c0f683f6462415e653c3a" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_5332a4daa46fd3f4e6625dd275" ON "notifications" ("recipient_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_5332a4daa46fd3f4e6625dd275" ON "notifications" ("recipient_id") `,
     );
     await queryRunner.query(
-      `CREATE TABLE "notification_preference" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "user_id" uuid NOT NULL, "preferences" jsonb, CONSTRAINT "REL_ff040d2d2e35c49b0052578382" UNIQUE ("user_id"), CONSTRAINT "PK_ba8d816b10f3dcfcd2e71ce5776" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "notification_preference" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "user_id" uuid NOT NULL, "preferences" jsonb, CONSTRAINT "REL_ff040d2d2e35c49b0052578382" UNIQUE ("user_id"), CONSTRAINT "PK_ba8d816b10f3dcfcd2e71ce5776" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_ff040d2d2e35c49b0052578382" ON "notification_preference" ("user_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_ff040d2d2e35c49b0052578382" ON "notification_preference" ("user_id") `,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."invites_status_enum" AS ENUM('pending', 'used', 'expired', 'failed')`,
+      `CREATE TYPE IF NOT EXISTS "public"."invites_status_enum" AS ENUM('pending', 'used', 'expired', 'failed')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "invites" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "email" character varying NOT NULL, "accepted" boolean NOT NULL DEFAULT false, "invited_at" TIMESTAMP NOT NULL DEFAULT now(), "expires_at" TIMESTAMP, "role" character varying NOT NULL, "full_name" character varying, "status" "public"."invites_status_enum" NOT NULL DEFAULT 'pending', "token_hash" character varying, "school_id" uuid, CONSTRAINT "UQ_08583b1882195ae2674f8391323" UNIQUE ("email"), CONSTRAINT "PK_aa52e96b44a714372f4dd31a0af" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "invites" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "email" character varying NOT NULL, "accepted" boolean NOT NULL DEFAULT false, "invited_at" TIMESTAMP NOT NULL DEFAULT now(), "expires_at" TIMESTAMP, "role" character varying NOT NULL, "full_name" character varying, "status" "public"."invites_status_enum" NOT NULL DEFAULT 'pending', "token_hash" character varying, "school_id" uuid, CONSTRAINT "UQ_08583b1882195ae2674f8391323" UNIQUE ("email"), CONSTRAINT "PK_aa52e96b44a714372f4dd31a0af" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_0843131f4ae91435709527a4f1" ON "invites" ("token_hash") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_0843131f4ae91435709527a4f1" ON "invites" ("token_hash") `,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."grade_submissions_status_enum" AS ENUM('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED')`,
+      `CREATE TYPE IF NOT EXISTS "public"."grade_submissions_status_enum" AS ENUM('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "grade_submissions" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "class_id" uuid NOT NULL, "subject_id" uuid NOT NULL, "term_id" uuid NOT NULL, "academic_session_id" uuid NOT NULL, "status" "public"."grade_submissions_status_enum" NOT NULL DEFAULT 'DRAFT', "submitted_at" TIMESTAMP, "reviewed_at" TIMESTAMP, "reviewed_by" uuid, "rejection_reason" text, CONSTRAINT "PK_d360d3e8498f69fbde61d3d1bba" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "grade_submissions" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "class_id" uuid NOT NULL, "subject_id" uuid NOT NULL, "term_id" uuid NOT NULL, "academic_session_id" uuid NOT NULL, "status" "public"."grade_submissions_status_enum" NOT NULL DEFAULT 'DRAFT', "submitted_at" TIMESTAMP, "reviewed_at" TIMESTAMP, "reviewed_by" uuid, "rejection_reason" text, CONSTRAINT "PK_d360d3e8498f69fbde61d3d1bba" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "grades" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "submission_id" uuid NOT NULL, "student_id" uuid NOT NULL, "ca_score" numeric(5,2), "exam_score" numeric(5,2), "total_score" numeric(5,2), "grade_letter" character varying(2), "comment" text, CONSTRAINT "PK_4740fb6f5df2505a48649f1687b" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "grades" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "submission_id" uuid NOT NULL, "student_id" uuid NOT NULL, "ca_score" numeric(5,2), "exam_score" numeric(5,2), "total_score" numeric(5,2), "grade_letter" character varying(2), "comment" text, CONSTRAINT "PK_4740fb6f5df2505a48649f1687b" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "databases" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "school_email" character varying NOT NULL, "database_name" character varying NOT NULL, "database_host" character varying NOT NULL, "database_username" character varying NOT NULL, "database_port" integer NOT NULL, "database_password" character varying NOT NULL, "email" character varying, CONSTRAINT "UQ_7b3b2d04bd716b0ad45d627756f" UNIQUE ("school_email"), CONSTRAINT "REL_c79845ecc69427038b52d0d967" UNIQUE ("email"), CONSTRAINT "PK_238a190c9ace4bea3dc1896f988" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "databases" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "school_email" character varying NOT NULL, "database_name" character varying NOT NULL, "database_host" character varying NOT NULL, "database_username" character varying NOT NULL, "database_port" integer NOT NULL, "database_password" character varying NOT NULL, "email" character varying, CONSTRAINT "UQ_7b3b2d04bd716b0ad45d627756f" UNIQUE ("school_email"), CONSTRAINT "REL_c79845ecc69427038b52d0d967" UNIQUE ("email"), CONSTRAINT "PK_238a190c9ace4bea3dc1896f988" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."teacher_manual_checkins_status_enum" AS ENUM('PENDING', 'APPROVED', 'REJECTED')`,
+      `CREATE TYPE IF NOT EXISTS "public"."teacher_manual_checkins_status_enum" AS ENUM('PENDING', 'APPROVED', 'REJECTED')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "teacher_manual_checkins" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "check_in_date" date NOT NULL, "check_in_time" TIMESTAMP NOT NULL, "submitted_at" TIMESTAMP NOT NULL, "reason" text NOT NULL, "status" "public"."teacher_manual_checkins_status_enum" NOT NULL DEFAULT 'PENDING', "reviewed_by" uuid, "reviewed_at" TIMESTAMP, "review_notes" text, CONSTRAINT "PK_5f6016e1e855a19a9d535dbffba" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "teacher_manual_checkins" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "check_in_date" date NOT NULL, "check_in_time" TIMESTAMP NOT NULL, "submitted_at" TIMESTAMP NOT NULL, "reason" text NOT NULL, "status" "public"."teacher_manual_checkins_status_enum" NOT NULL DEFAULT 'PENDING', "reviewed_by" uuid, "reviewed_at" TIMESTAMP, "review_notes" text, CONSTRAINT "PK_5f6016e1e855a19a9d535dbffba" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_85cae8a0b9946afe6afec4b095" ON "teacher_manual_checkins" ("teacher_id", "check_in_date") `,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_85cae8a0b9946afe6afec4b095" ON "teacher_manual_checkins" ("teacher_id", "check_in_date") `,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."teacher_daily_attendance_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'HALF_DAY')`,
+      `CREATE TYPE IF NOT EXISTS "public"."teacher_daily_attendance_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'HALF_DAY')`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."teacher_daily_attendance_source_enum" AS ENUM('MANUAL', 'AUTOMATED')`,
+      `CREATE TYPE IF NOT EXISTS "public"."teacher_daily_attendance_source_enum" AS ENUM('MANUAL', 'AUTOMATED')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "teacher_daily_attendance" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "date" date NOT NULL, "check_in_time" TIMESTAMP NOT NULL, "status" "public"."teacher_daily_attendance_status_enum" NOT NULL DEFAULT 'ABSENT', "source" "public"."teacher_daily_attendance_source_enum" NOT NULL DEFAULT 'MANUAL', "marked_by" uuid NOT NULL, "marked_at" TIMESTAMP NOT NULL, "notes" text, "check_out_time" TIMESTAMP, "total_hours" numeric(5,2), CONSTRAINT "PK_bfa80db64f84dd4f4128bad2b63" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "teacher_daily_attendance" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "date" date NOT NULL, "check_in_time" TIMESTAMP NOT NULL, "status" "public"."teacher_daily_attendance_status_enum" NOT NULL DEFAULT 'ABSENT', "source" "public"."teacher_daily_attendance_source_enum" NOT NULL DEFAULT 'MANUAL', "marked_by" uuid NOT NULL, "marked_at" TIMESTAMP NOT NULL, "notes" text, "check_out_time" TIMESTAMP, "total_hours" numeric(5,2), CONSTRAINT "PK_bfa80db64f84dd4f4128bad2b63" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_ba382c591eca4c1ce45fb6a086" ON "teacher_daily_attendance" ("date") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_ba382c591eca4c1ce45fb6a086" ON "teacher_daily_attendance" ("date") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_e9813fac28685a38416f693067" ON "teacher_daily_attendance" ("teacher_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_e9813fac28685a38416f693067" ON "teacher_daily_attendance" ("teacher_id") `,
     );
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_5750aae3f46e412d7b2c3ea541" ON "teacher_daily_attendance" ("teacher_id", "date") `,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_5750aae3f46e412d7b2c3ea541" ON "teacher_daily_attendance" ("teacher_id", "date") `,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."student_daily_attendance_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'HALF_DAY')`,
+      `CREATE TYPE IF NOT EXISTS "public"."student_daily_attendance_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'HALF_DAY')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "student_daily_attendance" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "session_id" uuid NOT NULL, "date" date NOT NULL, "marked_by" uuid NOT NULL, "marked_at" TIMESTAMP NOT NULL DEFAULT now(), "notes" text, "is_locked" boolean NOT NULL DEFAULT false, "class_id" uuid NOT NULL, "status" "public"."student_daily_attendance_status_enum" NOT NULL DEFAULT 'ABSENT', "check_in_time" TIMESTAMP, "check_out_time" TIMESTAMP, CONSTRAINT "PK_15a1889d4e57ea499b17f2f86a9" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "student_daily_attendance" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "session_id" uuid NOT NULL, "date" date NOT NULL, "marked_by" uuid NOT NULL, "marked_at" TIMESTAMP NOT NULL DEFAULT now(), "notes" text, "is_locked" boolean NOT NULL DEFAULT false, "class_id" uuid NOT NULL, "status" "public"."student_daily_attendance_status_enum" NOT NULL DEFAULT 'ABSENT', "check_in_time" TIMESTAMP, "check_out_time" TIMESTAMP, CONSTRAINT "PK_15a1889d4e57ea499b17f2f86a9" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_e959ecd14c0930e92ee458f4e1" ON "student_daily_attendance" ("session_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_e959ecd14c0930e92ee458f4e1" ON "student_daily_attendance" ("session_id") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_012380a3d50ecf3c163570360f" ON "student_daily_attendance" ("date") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_012380a3d50ecf3c163570360f" ON "student_daily_attendance" ("date") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_a2f3d140138e4b0ae2ad79a294" ON "student_daily_attendance" ("student_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_a2f3d140138e4b0ae2ad79a294" ON "student_daily_attendance" ("student_id") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_0d76bd8d24058e1f0cb521311f" ON "student_daily_attendance" ("class_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_0d76bd8d24058e1f0cb521311f" ON "student_daily_attendance" ("class_id") `,
     );
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_b9dfbb7268b46ca0adf953a39d" ON "student_daily_attendance" ("student_id", "class_id", "date") `,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_b9dfbb7268b46ca0adf953a39d" ON "student_daily_attendance" ("student_id", "class_id", "date") `,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."attendance_edit_requests_attendance_type_enum" AS ENUM('SCHEDULE_BASED', 'DAILY')`,
+      `CREATE TYPE IF NOT EXISTS "public"."attendance_edit_requests_attendance_type_enum" AS ENUM('SCHEDULE_BASED', 'DAILY')`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."attendance_edit_requests_status_enum" AS ENUM('PENDING', 'APPROVED', 'REJECTED')`,
+      `CREATE TYPE IF NOT EXISTS "public"."attendance_edit_requests_status_enum" AS ENUM('PENDING', 'APPROVED', 'REJECTED')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "attendance_edit_requests" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "attendance_id" uuid NOT NULL, "attendance_type" "public"."attendance_edit_requests_attendance_type_enum" NOT NULL, "requested_by" uuid NOT NULL, "proposed_changes" jsonb NOT NULL, "reason" text NOT NULL, "status" "public"."attendance_edit_requests_status_enum" NOT NULL DEFAULT 'PENDING', "reviewed_by" uuid, "reviewed_at" TIMESTAMP, "admin_comment" text, CONSTRAINT "PK_9a09445ca0addca00697461b783" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "attendance_edit_requests" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "attendance_id" uuid NOT NULL, "attendance_type" "public"."attendance_edit_requests_attendance_type_enum" NOT NULL, "requested_by" uuid NOT NULL, "proposed_changes" jsonb NOT NULL, "reason" text NOT NULL, "status" "public"."attendance_edit_requests_status_enum" NOT NULL DEFAULT 'PENDING', "reviewed_by" uuid, "reviewed_at" TIMESTAMP, "admin_comment" text, CONSTRAINT "PK_9a09445ca0addca00697461b783" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_b03a45aa2f09370e95f64099b0" ON "attendance_edit_requests" ("status") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_b03a45aa2f09370e95f64099b0" ON "attendance_edit_requests" ("status") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_5ec84a04f80d8b880ba243f217" ON "attendance_edit_requests" ("requested_by") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_5ec84a04f80d8b880ba243f217" ON "attendance_edit_requests" ("requested_by") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_7f7da705790cfe99d0e2cad8f9" ON "attendance_edit_requests" ("attendance_id", "attendance_type") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_7f7da705790cfe99d0e2cad8f9" ON "attendance_edit_requests" ("attendance_id", "attendance_type") `,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."attendance_records_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED')`,
+      `CREATE TYPE IF NOT EXISTS "public"."attendance_records_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "attendance_records" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "session_id" uuid NOT NULL, "date" date NOT NULL, "marked_by" uuid NOT NULL, "marked_at" TIMESTAMP NOT NULL DEFAULT now(), "notes" text, "is_locked" boolean NOT NULL DEFAULT false, "schedule_id" uuid NOT NULL, "status" "public"."attendance_records_status_enum" NOT NULL DEFAULT 'ABSENT', CONSTRAINT "PK_946920332f5bc9efad3f3023b96" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "attendance_records" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "session_id" uuid NOT NULL, "date" date NOT NULL, "marked_by" uuid NOT NULL, "marked_at" TIMESTAMP NOT NULL DEFAULT now(), "notes" text, "is_locked" boolean NOT NULL DEFAULT false, "schedule_id" uuid NOT NULL, "status" "public"."attendance_records_status_enum" NOT NULL DEFAULT 'ABSENT', CONSTRAINT "PK_946920332f5bc9efad3f3023b96" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_c51be2c1149e22de76b17626cb" ON "attendance_records" ("session_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_c51be2c1149e22de76b17626cb" ON "attendance_records" ("session_id") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_9fb6ef15f899489af7e47b6c83" ON "attendance_records" ("date") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_9fb6ef15f899489af7e47b6c83" ON "attendance_records" ("date") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_dbace05c012526710663f8d891" ON "attendance_records" ("student_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_dbace05c012526710663f8d891" ON "attendance_records" ("student_id") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_0dfe6d219c4a7a162ca0f84243" ON "attendance_records" ("schedule_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_0dfe6d219c4a7a162ca0f84243" ON "attendance_records" ("schedule_id") `,
     );
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_bc5a681d5155da257b53212208" ON "attendance_records" ("student_id", "schedule_id", "date") `,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_bc5a681d5155da257b53212208" ON "attendance_records" ("student_id", "schedule_id", "date") `,
     );
     await queryRunner.query(
-      `CREATE TABLE "fee_classes" ("fee_id" uuid NOT NULL, "class_id" uuid NOT NULL, CONSTRAINT "PK_0fc2686531814abf35bdaafe63f" PRIMARY KEY ("fee_id", "class_id"))`,
+      `CREATE TABLE IF NOT EXISTS "fee_classes" ("fee_id" uuid NOT NULL, "class_id" uuid NOT NULL, CONSTRAINT "PK_0fc2686531814abf35bdaafe63f" PRIMARY KEY ("fee_id", "class_id"))`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_a606fe84b86235ee3a1c5dcd06" ON "fee_classes" ("fee_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_a606fe84b86235ee3a1c5dcd06" ON "fee_classes" ("fee_id") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_6b4d2abab1dd082a5356bb6058" ON "fee_classes" ("class_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_6b4d2abab1dd082a5356bb6058" ON "fee_classes" ("class_id") `,
     );
     // Check if academic_sessions table exists before altering
     const academicSessionsExists = await queryRunner.query(
@@ -323,7 +376,7 @@ export class SyncSchema1730000000000 implements MigrationInterface {
       await queryRunner.query(`ALTER TABLE "users" ADD "streamId" uuid`);
     }
 
-    // Check if sessions table exists before altering (recheck since table may have been created)
+    // Check if sessions table exists and has the columns before altering
     const sessionsTableExistsForAlter = await queryRunner.query(
       `SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -332,63 +385,208 @@ export class SyncSchema1730000000000 implements MigrationInterface {
       )`,
     );
     if (sessionsTableExistsForAlter[0]?.exists) {
-      await queryRunner.query(
-        `ALTER TABLE "sessions" ALTER COLUMN "provider" SET NOT NULL`,
+      // Check if provider column exists
+      const providerColumnExists = await queryRunner.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'sessions' 
+          AND column_name = 'provider'
+        )`,
       );
-      await queryRunner.query(
-        `ALTER TABLE "sessions" ALTER COLUMN "is_active" SET NOT NULL`,
+      if (providerColumnExists[0]?.exists) {
+        await queryRunner.query(
+          `ALTER TABLE "sessions" ALTER COLUMN "provider" SET NOT NULL`,
+        );
+      }
+
+      // Check if is_active column exists
+      const isActiveColumnExists = await queryRunner.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'sessions' 
+          AND column_name = 'is_active'
+        )`,
       );
+      if (isActiveColumnExists[0]?.exists) {
+        await queryRunner.query(
+          `ALTER TABLE "sessions" ALTER COLUMN "is_active" SET NOT NULL`,
+        );
+      }
     }
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" DROP COLUMN "created_at"`,
+
+    // Check if academic_sessions table exists before altering columns/types
+    // Note: academic_sessions is created by CreateAcademicSession migration (1763558030414)
+    // which runs AFTER this migration, so these ALTERs will be skipped on fresh databases
+    if (academicSessionsExists[0]?.exists) {
+      // Check if created_at column exists before dropping
+      const createdAtExists = await queryRunner.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'academic_sessions' 
+          AND column_name = 'created_at'
+        )`,
+      );
+      if (createdAtExists[0]?.exists) {
+        await queryRunner.query(
+          `ALTER TABLE "academic_sessions" DROP COLUMN "created_at"`,
+        );
+      }
+      await queryRunner.query(
+        `ALTER TABLE "academic_sessions" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()`,
+      );
+
+      // Check if updated_at column exists before dropping
+      const updatedAtExists = await queryRunner.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'academic_sessions' 
+          AND column_name = 'updated_at'
+        )`,
+      );
+      if (updatedAtExists[0]?.exists) {
+        await queryRunner.query(
+          `ALTER TABLE "academic_sessions" DROP COLUMN "updated_at"`,
+        );
+      }
+      await queryRunner.query(
+        `ALTER TABLE "academic_sessions" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()`,
+      );
+
+      // Check if constraint exists before dropping
+      const constraintExists = await queryRunner.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.table_constraints 
+          WHERE table_schema = 'public' 
+          AND table_name = 'academic_sessions' 
+          AND constraint_name = 'UQ_5557c033f7a596c8ea80f741841'
+        )`,
+      );
+      if (constraintExists[0]?.exists) {
+        await queryRunner.query(
+          `ALTER TABLE "academic_sessions" DROP CONSTRAINT "UQ_5557c033f7a596c8ea80f741841"`,
+        );
+      }
+
+      // Handle enum type migration
+      const enumTypeExists = await queryRunner.query(
+        `SELECT EXISTS (
+          SELECT FROM pg_type 
+          WHERE typname = 'academic_sessions_status_enum'
+        )`,
+      );
+      if (enumTypeExists[0]?.exists) {
+        await queryRunner.query(
+          `ALTER TYPE "public"."academic_sessions_status_enum" RENAME TO "academic_sessions_status_enum_old"`,
+        );
+      }
+      await queryRunner.query(
+        `CREATE TYPE IF NOT EXISTS "public"."academic_sessions_status_enum" AS ENUM('Active', 'Inactive', 'Archived')`,
+      );
+
+      // Check if status column exists before altering
+      const statusColumnExists = await queryRunner.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'academic_sessions' 
+          AND column_name = 'status'
+        )`,
+      );
+      if (statusColumnExists[0]?.exists) {
+        await queryRunner.query(
+          `ALTER TABLE "academic_sessions" ALTER COLUMN "status" DROP DEFAULT`,
+        );
+        await queryRunner.query(
+          `ALTER TABLE "academic_sessions" ALTER COLUMN "status" TYPE "public"."academic_sessions_status_enum" USING "status"::"text"::"public"."academic_sessions_status_enum"`,
+        );
+        await queryRunner.query(
+          `ALTER TABLE "academic_sessions" ALTER COLUMN "status" SET DEFAULT 'Active'`,
+        );
+      }
+
+      if (enumTypeExists[0]?.exists) {
+        await queryRunner.query(
+          `DROP TYPE IF EXISTS "public"."academic_sessions_status_enum_old"`,
+        );
+      }
+    }
+    
+    // Check if sessions table exists before adding constraint
+    const sessionsTableExistsForConstraint = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'sessions'
+      )`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" ADD "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()`,
+    if (sessionsTableExistsForConstraint[0]?.exists) {
+      // Check if constraint doesn't already exist
+      const constraintExists = await queryRunner.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.table_constraints 
+          WHERE table_schema = 'public' 
+          AND table_name = 'sessions' 
+          AND constraint_name = 'FK_085d540d9f418cfbdc7bd55bb19'
+        )`,
+      );
+      if (!constraintExists[0]?.exists) {
+        await queryRunner.query(
+          `ALTER TABLE "sessions" ADD CONSTRAINT "FK_085d540d9f418cfbdc7bd55bb19" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+        );
+      }
+    }
+    // Add FK constraint only if both tables exist
+    // Note: academic_sessions is created by CreateAcademicSession migration (runs after this)
+    const termsTableExists = await queryRunner.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'terms'
+      )`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" DROP COLUMN "updated_at"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" ADD "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" DROP CONSTRAINT "UQ_5557c033f7a596c8ea80f741841"`,
-    );
-    await queryRunner.query(
-      `ALTER TYPE "public"."academic_sessions_status_enum" RENAME TO "academic_sessions_status_enum_old"`,
-    );
-    await queryRunner.query(
-      `CREATE TYPE "public"."academic_sessions_status_enum" AS ENUM('Active', 'Inactive', 'Archived')`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" ALTER COLUMN "status" DROP DEFAULT`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" ALTER COLUMN "status" TYPE "public"."academic_sessions_status_enum" USING "status"::"text"::"public"."academic_sessions_status_enum"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "academic_sessions" ALTER COLUMN "status" SET DEFAULT 'Active'`,
-    );
-    await queryRunner.query(
-      `DROP TYPE "public"."academic_sessions_status_enum_old"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "sessions" ADD CONSTRAINT "FK_085d540d9f418cfbdc7bd55bb19" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "terms" ADD CONSTRAINT "FK_2a45e5f1a157f965dad749ef1dd" FOREIGN KEY ("session_id") REFERENCES "academic_sessions"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
-    );
+    if (termsTableExists[0]?.exists && academicSessionsExists[0]?.exists) {
+      const fkExists = await queryRunner.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.table_constraints 
+          WHERE table_schema = 'public' 
+          AND table_name = 'terms' 
+          AND constraint_name = 'FK_2a45e5f1a157f965dad749ef1dd'
+        )`,
+      );
+      if (!fkExists[0]?.exists) {
+        await queryRunner.query(
+          `ALTER TABLE "terms" ADD CONSTRAINT "FK_2a45e5f1a157f965dad749ef1dd" FOREIGN KEY ("session_id") REFERENCES "academic_sessions"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+        );
+      }
+    }
     await queryRunner.query(
       `ALTER TABLE "class_teachers" ADD CONSTRAINT "FK_1192d6f4432d1de68d66e9a9cd7" FOREIGN KEY ("class_id") REFERENCES "class"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
     await queryRunner.query(
       `ALTER TABLE "class_teachers" ADD CONSTRAINT "FK_504b6c1a3616565a5a1cedcaa63" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "parents" ADD CONSTRAINT "FK_c94c3cea9b43a18c81269ded41d" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    // Add FK constraints that reference 'users' table (created by new_user_migration)
+    await this.addForeignKeySafely(
+      queryRunner,
+      'parents',
+      'FK_c94c3cea9b43a18c81269ded41d',
+      'user_id',
+      'users',
+      'id',
+      'CASCADE',
     );
-    await queryRunner.query(
-      `ALTER TABLE "students" ADD CONSTRAINT "FK_fb3eff90b11bddf7285f9b4e281" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    await this.addForeignKeySafely(
+      queryRunner,
+      'students',
+      'FK_fb3eff90b11bddf7285f9b4e281',
+      'user_id',
+      'users',
+      'id',
+      'CASCADE',
     );
     await queryRunner.query(
       `ALTER TABLE "students" ADD CONSTRAINT "FK_277791be7d963aa0529c476f7d2" FOREIGN KEY ("stream_id") REFERENCES "stream"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
@@ -405,8 +603,15 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "class_students" ADD CONSTRAINT "FK_6d12f65ab61f9f92e3d7e95ad23" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "teachers" ADD CONSTRAINT "FK_4668d4752e6766682d1be0b346f" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    // Add FK constraint for teachers -> users (users created by new_user_migration)
+    await this.addForeignKeySafely(
+      queryRunner,
+      'teachers',
+      'FK_4668d4752e6766682d1be0b346f',
+      'user_id',
+      'users',
+      'id',
+      'CASCADE',
     );
     await queryRunner.query(
       `ALTER TABLE "class_subjects" ADD CONSTRAINT "FK_433f93dd22b685e59c285726a1f" FOREIGN KEY ("class_id") REFERENCES "class"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
@@ -432,8 +637,14 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "timetables" ADD CONSTRAINT "FK_54d3ddcc757a7639a1ca4ea159c" FOREIGN KEY ("class_id") REFERENCES "class"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "class" ADD CONSTRAINT "FK_c07874fd7fa46efbb14dad30005" FOREIGN KEY ("academic_session_id") REFERENCES "academic_sessions"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for class -> academic_sessions (academic_sessions created by CreateAcademicSession)
+    await this.addForeignKeySafely(
+      queryRunner,
+      'class',
+      'FK_c07874fd7fa46efbb14dad30005',
+      'academic_session_id',
+      'academic_sessions',
+      'id',
     );
     await queryRunner.query(
       `ALTER TABLE "stream" ADD CONSTRAINT "FK_670f7496ebbd8029b00e80841e7" FOREIGN KEY ("class_id") REFERENCES "class"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
@@ -450,8 +661,14 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "superadmin_sessions" ADD CONSTRAINT "FK_926db05e96145ee08e015f65af7" FOREIGN KEY ("superadmin_id") REFERENCES "superadmin"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "session" ADD CONSTRAINT "FK_3d2f174ef04fb312fdebd0ddc53" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for session -> users (users created by new_user_migration)
+    await this.addForeignKeySafely(
+      queryRunner,
+      'session',
+      'FK_3d2f174ef04fb312fdebd0ddc53',
+      'userId',
+      'users',
+      'id',
     );
     await queryRunner.query(
       `ALTER TABLE "result_subject_lines" ADD CONSTRAINT "FK_cfa18ea8b7b83237bdaffa2618f" FOREIGN KEY ("result_id") REFERENCES "results"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
@@ -468,8 +685,14 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "results" ADD CONSTRAINT "FK_1213ca228b65860aaaa9e6fb28c" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "results" ADD CONSTRAINT "FK_46e376bbab6f5073210fe39ba5d" FOREIGN KEY ("academic_session_id") REFERENCES "academic_sessions"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for results -> academic_sessions
+    await this.addForeignKeySafely(
+      queryRunner,
+      'results',
+      'FK_46e376bbab6f5073210fe39ba5d',
+      'academic_session_id',
+      'academic_sessions',
+      'id',
     );
     await queryRunner.query(
       `ALTER TABLE "fee_assignments" ADD CONSTRAINT "FK_043dd779984ebc0332304d6704d" FOREIGN KEY ("fee_id") REFERENCES "fees"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
@@ -480,8 +703,14 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "fees" ADD CONSTRAINT "FK_8e42cd61870ee8c71072eff55a3" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "fees" ADD CONSTRAINT "FK_6b69f3bd75527a53189b1c08a5f" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for fees -> users
+    await this.addForeignKeySafely(
+      queryRunner,
+      'fees',
+      'FK_6b69f3bd75527a53189b1c08a5f',
+      'created_by',
+      'users',
+      'id',
     );
     await queryRunner.query(
       `ALTER TABLE "payments" ADD CONSTRAINT "FK_9fd5d6ef620b0140a67ff2d95c4" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
@@ -492,11 +721,24 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "payments" ADD CONSTRAINT "FK_f63c15a47ca5b8f3c2c7564a6be" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "payments" ADD CONSTRAINT "FK_b8128ab843771cf6d42ab3ca188" FOREIGN KEY ("recorded_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for payments -> users
+    await this.addForeignKeySafely(
+      queryRunner,
+      'payments',
+      'FK_b8128ab843771cf6d42ab3ca188',
+      'recorded_by',
+      'users',
+      'id',
     );
-    await queryRunner.query(
-      `ALTER TABLE "notification_preference" ADD CONSTRAINT "FK_ff040d2d2e35c49b00525783829" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    // Add FK constraint for notification_preference -> users
+    await this.addForeignKeySafely(
+      queryRunner,
+      'notification_preference',
+      'FK_ff040d2d2e35c49b00525783829',
+      'user_id',
+      'users',
+      'id',
+      'CASCADE',
     );
     await queryRunner.query(
       `ALTER TABLE "invites" ADD CONSTRAINT "FK_7f2f179b9f5940e0f8f41847cfa" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
@@ -513,11 +755,22 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "grade_submissions" ADD CONSTRAINT "FK_d67751032d6f2ffa297234e3566" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "grade_submissions" ADD CONSTRAINT "FK_468e5c8fa2defd4f3af00976e8c" FOREIGN KEY ("academic_session_id") REFERENCES "academic_sessions"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraints for grade_submissions
+    await this.addForeignKeySafely(
+      queryRunner,
+      'grade_submissions',
+      'FK_468e5c8fa2defd4f3af00976e8c',
+      'academic_session_id',
+      'academic_sessions',
+      'id',
     );
-    await queryRunner.query(
-      `ALTER TABLE "grade_submissions" ADD CONSTRAINT "FK_503b8800bf521baf496516c4d4d" FOREIGN KEY ("reviewed_by") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    await this.addForeignKeySafely(
+      queryRunner,
+      'grade_submissions',
+      'FK_503b8800bf521baf496516c4d4d',
+      'reviewed_by',
+      'users',
+      'id',
     );
     await queryRunner.query(
       `ALTER TABLE "grades" ADD CONSTRAINT "FK_f573ccb37f87e9ef83c31308bce" FOREIGN KEY ("submission_id") REFERENCES "grade_submissions"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
@@ -528,8 +781,14 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "databases" ADD CONSTRAINT "FK_c79845ecc69427038b52d0d9672" FOREIGN KEY ("email") REFERENCES "schools"("email") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "user_2fa" ADD CONSTRAINT "FK_ed539980faac14226a05368c4d1" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    // Add FK constraint for user_2fa -> users (user_2fa created by AddTwoFactorAuthToUsers, users by new_user_migration)
+    await this.addForeignKeySafely(
+      queryRunner,
+      'user_2fa',
+      'FK_ed539980faac14226a05368c4d1',
+      'user_id',
+      'users',
+      'id',
     );
     await queryRunner.query(
       `ALTER TABLE "teacher_manual_checkins" ADD CONSTRAINT "FK_eebea58c9f82106ae89a059a183" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
@@ -778,7 +1037,7 @@ export class SyncSchema1730000000000 implements MigrationInterface {
       `ALTER TABLE "sessions" DROP CONSTRAINT "FK_085d540d9f418cfbdc7bd55bb19"`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."academic_sessions_status_enum_old" AS ENUM('Active', 'Inactive')`,
+      `CREATE TYPE IF NOT EXISTS "public"."academic_sessions_status_enum_old" AS ENUM('Active', 'Inactive')`,
     );
     await queryRunner.query(
       `ALTER TABLE "academic_sessions" ALTER COLUMN "status" DROP DEFAULT`,
