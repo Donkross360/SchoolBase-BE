@@ -85,14 +85,14 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     }
     await queryRunner.query(`
         DO $$ BEGIN
-            CREATE TYPE IF NOT EXISTS "public"."terms_name_enum" AS ENUM('First term', 'Second term', 'Third term');
+            CREATE TYPE "public"."terms_name_enum" AS ENUM('First term', 'Second term', 'Third term');
         EXCEPTION
             WHEN duplicate_object THEN null;
         END $$;
         `);
     await queryRunner.query(`
         DO $$ BEGIN
-            CREATE TYPE IF NOT EXISTS "public"."terms_status_enum" AS ENUM('Active', 'Inactive');
+            CREATE TYPE "public"."terms_status_enum" AS ENUM('Active', 'Inactive');
         EXCEPTION
             WHEN duplicate_object THEN null;
         END $$;
@@ -118,9 +118,13 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "class_students" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "session_id" character varying NOT NULL, "enrollment_date" TIMESTAMP NOT NULL DEFAULT now(), "is_active" boolean NOT NULL DEFAULT true, "class_id" uuid, "student_id" uuid, CONSTRAINT "PK_f1ef7a4fd2eabf7ef3c6bc7cae3" PRIMARY KEY ("id"))`,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."teachers_title_enum" AS ENUM('Mr', 'Mrs', 'Miss', 'Dr', 'Prof')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."teachers_title_enum" AS ENUM('Mr', 'Mrs', 'Miss', 'Dr', 'Prof');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "teachers" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "user_id" uuid NOT NULL, "employment_id" character varying NOT NULL, "title" "public"."teachers_title_enum" NOT NULL, "photo_url" character varying, "is_active" boolean NOT NULL DEFAULT true, CONSTRAINT "UQ_4668d4752e6766682d1be0b346f" UNIQUE ("user_id"), CONSTRAINT "UQ_8e683bfa0a4320b135683e5e054" UNIQUE ("employment_id"), CONSTRAINT "REL_4668d4752e6766682d1be0b346" UNIQUE ("user_id"), CONSTRAINT "PK_a8d4f83be3abe4c687b0a0093c8" PRIMARY KEY ("id"))`,
     );
@@ -130,12 +134,20 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "subjects" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "name" character varying(255) NOT NULL, CONSTRAINT "UQ_47a287fe64bd0e1027e603c335c" UNIQUE ("name"), CONSTRAINT "UQ_47a287fe64bd0e1027e603c335c" UNIQUE ("name"), CONSTRAINT "PK_1a023685ac2b051b4e557b0b280" PRIMARY KEY ("id"))`,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."schedules_day_enum" AS ENUM('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY')`,
-    );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."schedules_period_type_enum" AS ENUM('ACADEMICS', 'BREAK')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."schedules_day_enum" AS ENUM('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."schedules_period_type_enum" AS ENUM('ACADEMICS', 'BREAK');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "schedules" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "day" "public"."schedules_day_enum" NOT NULL, "start_time" TIME NOT NULL, "end_time" TIME NOT NULL, "period_type" "public"."schedules_period_type_enum" NOT NULL DEFAULT 'ACADEMICS', "room_id" uuid, "timetable_id" uuid NOT NULL, "subject_id" uuid, "teacher_id" uuid, CONSTRAINT "PK_7e33fc2ea755a5765e3564e66dd" PRIMARY KEY ("id"))`,
     );
@@ -157,9 +169,13 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "teacher_profiles" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_uid" character varying NOT NULL, "user_id" integer NOT NULL, "first_name" character varying NOT NULL, "last_name" character varying NOT NULL, CONSTRAINT "UQ_663fbeaaa7b4db3242cbda8767c" UNIQUE ("teacher_uid"), CONSTRAINT "PK_fdd17d62015e40674217a407484" PRIMARY KEY ("id"))`,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."superadmin_role_enum" AS ENUM('SUPERADMIN')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."superadmin_role_enum" AS ENUM('SUPERADMIN');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "superadmin" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "first_name" character varying(50) NOT NULL, "last_name" character varying(50) NOT NULL, "email" character varying NOT NULL, "school_name" character varying(255) NOT NULL, "password" character varying, "is_active" boolean NOT NULL DEFAULT false, "reset_token" character varying, "reset_token_expiration" date, "role" "public"."superadmin_role_enum" NOT NULL DEFAULT 'SUPERADMIN', CONSTRAINT "UQ_00b221dab05a330bb5f6c4b3d6b" UNIQUE ("email"), CONSTRAINT "PK_34da9117b572e9b32a8d829ae84" PRIMARY KEY ("id"))`,
     );
@@ -181,24 +197,40 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "fee_assignments" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "fee_id" uuid NOT NULL, "student_id" uuid NOT NULL, CONSTRAINT "PK_5d52331b84e42c325461e73d798" PRIMARY KEY ("id"))`,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."fees_status_enum" AS ENUM('ACTIVE', 'INACTIVE')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."fees_status_enum" AS ENUM('ACTIVE', 'INACTIVE');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "fees" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "component_name" character varying NOT NULL, "description" character varying, "amount" numeric(12,2) NOT NULL, "term_id" uuid NOT NULL, "status" "public"."fees_status_enum" NOT NULL DEFAULT 'ACTIVE', "created_by" uuid, CONSTRAINT "PK_97f3a1b1b8ee5674fd4da93f461" PRIMARY KEY ("id"))`,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."payments_payment_method_enum" AS ENUM('cash', 'bank_transfer', 'card', 'mobile_money', 'cheque')`,
-    );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."payments_status_enum" AS ENUM('paid', 'pending', 'overdue')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."payments_payment_method_enum" AS ENUM('cash', 'bank_transfer', 'card', 'mobile_money', 'cheque');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."payments_status_enum" AS ENUM('paid', 'pending', 'overdue');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "payments" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "fee_component_id" uuid NOT NULL, "amount_paid" numeric(12,2) NOT NULL, "payment_method" "public"."payments_payment_method_enum" NOT NULL, "payment_date" TIMESTAMP NOT NULL, "term_id" uuid NOT NULL, "session_id" uuid NOT NULL, "invoice_number" character varying, "transaction_id" character varying, "receipt_url" character varying, "status" "public"."payments_status_enum" NOT NULL DEFAULT 'paid', "recorded_by" uuid NOT NULL, CONSTRAINT "PK_197ab7af18c93fbb0c9b28b4a59" PRIMARY KEY ("id"))`,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."notifications_type_enum" AS ENUM('ACADEMIC_UPDATE', 'RESULT_ALERT', 'TIMETABLE_CHANGE', 'FEE_UPDATE', 'SYSTEM_ALERT')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."notifications_type_enum" AS ENUM('ACADEMIC_UPDATE', 'RESULT_ALERT', 'TIMETABLE_CHANGE', 'FEE_UPDATE', 'SYSTEM_ALERT');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "notifications" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "recipient_id" character varying NOT NULL, "title" character varying NOT NULL, "message" text NOT NULL, "type" "public"."notifications_type_enum" NOT NULL DEFAULT 'SYSTEM_ALERT', "is_read" boolean NOT NULL DEFAULT false, "metadata" jsonb, CONSTRAINT "PK_6a72c3c0f683f6462415e653c3a" PRIMARY KEY ("id"))`,
     );
@@ -211,18 +243,26 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS "IDX_ff040d2d2e35c49b0052578382" ON "notification_preference" ("user_id") `,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."invites_status_enum" AS ENUM('pending', 'used', 'expired', 'failed')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."invites_status_enum" AS ENUM('pending', 'used', 'expired', 'failed');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "invites" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "email" character varying NOT NULL, "accepted" boolean NOT NULL DEFAULT false, "invited_at" TIMESTAMP NOT NULL DEFAULT now(), "expires_at" TIMESTAMP, "role" character varying NOT NULL, "full_name" character varying, "status" "public"."invites_status_enum" NOT NULL DEFAULT 'pending', "token_hash" character varying, "school_id" uuid, CONSTRAINT "UQ_08583b1882195ae2674f8391323" UNIQUE ("email"), CONSTRAINT "PK_aa52e96b44a714372f4dd31a0af" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS "IDX_0843131f4ae91435709527a4f1" ON "invites" ("token_hash") `,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."grade_submissions_status_enum" AS ENUM('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."grade_submissions_status_enum" AS ENUM('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "grade_submissions" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "class_id" uuid NOT NULL, "subject_id" uuid NOT NULL, "term_id" uuid NOT NULL, "academic_session_id" uuid NOT NULL, "status" "public"."grade_submissions_status_enum" NOT NULL DEFAULT 'DRAFT', "submitted_at" TIMESTAMP, "reviewed_at" TIMESTAMP, "reviewed_by" uuid, "rejection_reason" text, CONSTRAINT "PK_d360d3e8498f69fbde61d3d1bba" PRIMARY KEY ("id"))`,
     );
@@ -232,21 +272,33 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "databases" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "school_email" character varying NOT NULL, "database_name" character varying NOT NULL, "database_host" character varying NOT NULL, "database_username" character varying NOT NULL, "database_port" integer NOT NULL, "database_password" character varying NOT NULL, "email" character varying, CONSTRAINT "UQ_7b3b2d04bd716b0ad45d627756f" UNIQUE ("school_email"), CONSTRAINT "REL_c79845ecc69427038b52d0d967" UNIQUE ("email"), CONSTRAINT "PK_238a190c9ace4bea3dc1896f988" PRIMARY KEY ("id"))`,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."teacher_manual_checkins_status_enum" AS ENUM('PENDING', 'APPROVED', 'REJECTED')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."teacher_manual_checkins_status_enum" AS ENUM('PENDING', 'APPROVED', 'REJECTED');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "teacher_manual_checkins" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "check_in_date" date NOT NULL, "check_in_time" TIMESTAMP NOT NULL, "submitted_at" TIMESTAMP NOT NULL, "reason" text NOT NULL, "status" "public"."teacher_manual_checkins_status_enum" NOT NULL DEFAULT 'PENDING', "reviewed_by" uuid, "reviewed_at" TIMESTAMP, "review_notes" text, CONSTRAINT "PK_5f6016e1e855a19a9d535dbffba" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_85cae8a0b9946afe6afec4b095" ON "teacher_manual_checkins" ("teacher_id", "check_in_date") `,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."teacher_daily_attendance_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'HALF_DAY')`,
-    );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."teacher_daily_attendance_source_enum" AS ENUM('MANUAL', 'AUTOMATED')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."teacher_daily_attendance_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'HALF_DAY');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."teacher_daily_attendance_source_enum" AS ENUM('MANUAL', 'AUTOMATED');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "teacher_daily_attendance" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "teacher_id" uuid NOT NULL, "date" date NOT NULL, "check_in_time" TIMESTAMP NOT NULL, "status" "public"."teacher_daily_attendance_status_enum" NOT NULL DEFAULT 'ABSENT', "source" "public"."teacher_daily_attendance_source_enum" NOT NULL DEFAULT 'MANUAL', "marked_by" uuid NOT NULL, "marked_at" TIMESTAMP NOT NULL, "notes" text, "check_out_time" TIMESTAMP, "total_hours" numeric(5,2), CONSTRAINT "PK_bfa80db64f84dd4f4128bad2b63" PRIMARY KEY ("id"))`,
     );
@@ -259,9 +311,13 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_5750aae3f46e412d7b2c3ea541" ON "teacher_daily_attendance" ("teacher_id", "date") `,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."student_daily_attendance_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'HALF_DAY')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."student_daily_attendance_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'HALF_DAY');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "student_daily_attendance" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "session_id" uuid NOT NULL, "date" date NOT NULL, "marked_by" uuid NOT NULL, "marked_at" TIMESTAMP NOT NULL DEFAULT now(), "notes" text, "is_locked" boolean NOT NULL DEFAULT false, "class_id" uuid NOT NULL, "status" "public"."student_daily_attendance_status_enum" NOT NULL DEFAULT 'ABSENT', "check_in_time" TIMESTAMP, "check_out_time" TIMESTAMP, CONSTRAINT "PK_15a1889d4e57ea499b17f2f86a9" PRIMARY KEY ("id"))`,
     );
@@ -280,12 +336,20 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_b9dfbb7268b46ca0adf953a39d" ON "student_daily_attendance" ("student_id", "class_id", "date") `,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."attendance_edit_requests_attendance_type_enum" AS ENUM('SCHEDULE_BASED', 'DAILY')`,
-    );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."attendance_edit_requests_status_enum" AS ENUM('PENDING', 'APPROVED', 'REJECTED')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."attendance_edit_requests_attendance_type_enum" AS ENUM('SCHEDULE_BASED', 'DAILY');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."attendance_edit_requests_status_enum" AS ENUM('PENDING', 'APPROVED', 'REJECTED');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "attendance_edit_requests" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "attendance_id" uuid NOT NULL, "attendance_type" "public"."attendance_edit_requests_attendance_type_enum" NOT NULL, "requested_by" uuid NOT NULL, "proposed_changes" jsonb NOT NULL, "reason" text NOT NULL, "status" "public"."attendance_edit_requests_status_enum" NOT NULL DEFAULT 'PENDING', "reviewed_by" uuid, "reviewed_at" TIMESTAMP, "admin_comment" text, CONSTRAINT "PK_9a09445ca0addca00697461b783" PRIMARY KEY ("id"))`,
     );
@@ -298,9 +362,13 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS "IDX_7f7da705790cfe99d0e2cad8f9" ON "attendance_edit_requests" ("attendance_id", "attendance_type") `,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."attendance_records_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."attendance_records_status_enum" AS ENUM('PRESENT', 'ABSENT', 'LATE', 'EXCUSED');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS "attendance_records" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "student_id" uuid NOT NULL, "session_id" uuid NOT NULL, "date" date NOT NULL, "marked_by" uuid NOT NULL, "marked_at" TIMESTAMP NOT NULL DEFAULT now(), "notes" text, "is_locked" boolean NOT NULL DEFAULT false, "schedule_id" uuid NOT NULL, "status" "public"."attendance_records_status_enum" NOT NULL DEFAULT 'ABSENT', CONSTRAINT "PK_946920332f5bc9efad3f3023b96" PRIMARY KEY ("id"))`,
     );
@@ -484,7 +552,11 @@ export class SyncSchema1730000000000 implements MigrationInterface {
         );
       }
       await queryRunner.query(
-        `CREATE TYPE IF NOT EXISTS "public"."academic_sessions_status_enum" AS ENUM('Active', 'Inactive', 'Archived')`,
+        `DO $$ BEGIN
+            CREATE TYPE "public"."academic_sessions_status_enum" AS ENUM('Active', 'Inactive', 'Archived');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;`,
       );
 
       // Check if status column exists before altering
@@ -1036,9 +1108,13 @@ export class SyncSchema1730000000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "sessions" DROP CONSTRAINT "FK_085d540d9f418cfbdc7bd55bb19"`,
     );
-    await queryRunner.query(
-      `CREATE TYPE IF NOT EXISTS "public"."academic_sessions_status_enum_old" AS ENUM('Active', 'Inactive')`,
-    );
+    await queryRunner.query(`
+      DO $$ BEGIN
+          CREATE TYPE "public"."academic_sessions_status_enum_old" AS ENUM('Active', 'Inactive');
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+    `);
     await queryRunner.query(
       `ALTER TABLE "academic_sessions" ALTER COLUMN "status" DROP DEFAULT`,
     );
