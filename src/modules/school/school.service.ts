@@ -3,16 +3,13 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 
 import { Injectable, ConflictException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
 import * as sharp from 'sharp';
 
 import * as sysMsg from '../../constants/system.messages';
-import { UserRole } from '../shared/enums';
 
 import { CreateInstallationDto } from './dto/create-installation.dto';
 import { UpdateSchoolDto } from './dto/update-school.dto';
 import { SchoolModelAction } from './model-actions/school.action';
-import { UserModelAction } from '../user/model-actions/user-actions';
 
 interface IUploadedFile {
   buffer: Buffer;
@@ -27,7 +24,6 @@ export class SchoolService {
 
   constructor(
     private readonly schoolModelAction: SchoolModelAction,
-    private readonly userModelAction: UserModelAction,
   ) {}
 
   async processInstallation(
@@ -90,6 +86,8 @@ export class SchoolService {
       }
 
       // Create school record
+      // Note: Admin users are created separately via the superadmin setup flow
+      // This endpoint only handles school installation, not user creation
       const school = await this.schoolModelAction.create({
         createPayload: {
           name: createInstallationDto.name,
@@ -104,59 +102,6 @@ export class SchoolService {
         },
         transactionOptions: { useTransaction: false },
       });
-
-      // Create first admin user if admin details are provided
-      if (
-        createInstallationDto.admin_first_name &&
-        createInstallationDto.admin_last_name &&
-        createInstallationDto.admin_password &&
-        createInstallationDto.email
-      ) {
-        // Check if user already exists
-        const existingUser = await this.userModelAction.get({
-          identifierOptions: { email: createInstallationDto.email },
-        });
-
-        // Hash password
-        const hashedPassword = await bcrypt.hash(
-          createInstallationDto.admin_password,
-          10,
-        );
-
-        if (!existingUser) {
-          // Create first admin user
-          await this.userModelAction.create({
-            createPayload: {
-              email: createInstallationDto.email,
-              first_name: createInstallationDto.admin_first_name,
-              last_name: createInstallationDto.admin_last_name,
-              password: hashedPassword,
-              role: [UserRole.ADMIN],
-              phone: createInstallationDto.phone || null,
-              gender: null,
-              dob: null,
-              is_active: true,
-              is_verified: true,
-            },
-            transactionOptions: { useTransaction: false },
-          });
-        } else {
-          // Update existing admin user with new password and details during setup
-          // This ensures the user can log in with the credentials from the setup form
-          await this.userModelAction.update({
-            identifierOptions: { email: createInstallationDto.email },
-            updatePayload: {
-              first_name: createInstallationDto.admin_first_name,
-              last_name: createInstallationDto.admin_last_name,
-              password: hashedPassword,
-              phone: createInstallationDto.phone || existingUser.phone || null,
-              is_active: true,
-              is_verified: true,
-            },
-            transactionOptions: { useTransaction: false },
-          });
-        }
-      }
 
       return {
         id: school.id,
