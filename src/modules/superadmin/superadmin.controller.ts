@@ -9,7 +9,6 @@ import {
 
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
-import { InstallationCompleteGuard } from '../shared/guards/installation-complete.guard';
 
 import {
   ApiCreateSuperadmin,
@@ -34,7 +33,6 @@ export class SuperadminController {
   }
 
   @Post('login')
-  @UseGuards(InstallationCompleteGuard)
   @ApiLoginSuperadmin()
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginSuperadminDto: LoginSuperadminDto) {
@@ -42,7 +40,6 @@ export class SuperadminController {
   }
 
   @Post('logout')
-  @UseGuards(InstallationCompleteGuard)
   @ApiLogoutSuperadmin()
   @HttpCode(HttpStatus.OK)
   async logout(@Body() logoutDto: LogoutDto) {

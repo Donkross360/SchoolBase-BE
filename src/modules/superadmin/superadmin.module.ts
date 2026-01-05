@@ -7,7 +7,6 @@ import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
 import { EmailModule } from '../email/email.module';
 import { InstallationCompleteGuard } from '../shared/guards/installation-complete.guard';
 import { SchoolModule } from '../school/school.module';
-import { UserModule } from '../user/user.module';
 
 import { SuperAdmin } from './entities/superadmin.entity';
 import { SuperadminModelAction } from './model-actions/superadmin-actions';
@@ -29,7 +28,6 @@ import { SuperadminService } from './superadmin.service';
     SuperadminSessionModule,
     EmailModule,
     forwardRef(() => SchoolModule),
-    UserModule,
   ],
   controllers: [SuperadminController],
   providers: [

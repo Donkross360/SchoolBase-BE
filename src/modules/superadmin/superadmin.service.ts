@@ -19,8 +19,6 @@ import config from '../../config/config';
 import * as sysMsg from '../../constants/system.messages';
 import { EmailService } from '../email/email.service';
 import { SchoolModelAction } from '../school/model-actions/school.action';
-import { UserService } from '../user/user.service';
-import { CreateUserDto, UserRole } from '../user/dto/create-user.dto';
 
 import { CreateSuperadminDto } from './dto/create-superadmin.dto';
 import { LoginSuperadminDto } from './dto/login-superadmin.dto';
@@ -42,8 +40,6 @@ export class SuperadminService {
     private readonly superadminSessionService: SuperadminSessionService,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
-    @Inject(forwardRef(() => UserService))
-    private readonly userService: UserService,
   ) {
     this.logger = logger.child({ context: SuperadminService.name });
   }
@@ -156,43 +152,6 @@ export class SuperadminService {
       });
 
       if (installations && installations.length > 0) {
-        // Installation is complete - always create admin user account
-        // This allows the user to login with the credentials they provided
-        try {
-          // Check if user already exists
-          const existingUser = await this.userService.findByEmail(createSuperadminDto.email);
-          if (!existingUser) {
-            // Hash the password (same as superadmin)
-            const passwordHash: string = await bcrypt.hash(createSuperadminDto.password, 10);
-            const adminUserDto: CreateUserDto = {
-              first_name: createSuperadminDto.first_name,
-              last_name: createSuperadminDto.last_name,
-              email: createSuperadminDto.email,
-              password: passwordHash,
-              role: [UserRole.ADMIN],
-              gender: 'OTHER', // Default since not provided in superadmin DTO
-              dob: new Date().toISOString().split('T')[0], // Default to today
-              phone: '', // Default empty since not provided
-              is_active: true,
-              is_verified: true,
-            };
-            await this.userService.create(adminUserDto);
-            this.logger.info(
-              `Admin user account created for ${createSuperadminDto.email}`,
-            );
-          } else {
-            this.logger.info(
-              `User account already exists for ${createSuperadminDto.email}, skipping creation`,
-            );
-          }
-        } catch (userError) {
-          // Log error but don't fail superadmin creation
-          this.logger.warn(
-            `Failed to create admin user account: ${userError instanceof Error ? userError.message : String(userError)}`,
-            userError instanceof Error ? userError.stack : undefined,
-          );
-        }
-
         // Deactivate super admin only if auto-deactivation is enabled
         if (autoDeactivate) {
           await this.superadminModelAction.update({
