@@ -59,9 +59,6 @@ export class SuperadminController {
     @Body() createAdminDto: CreateAdminDto,
     @CurrentSuperadmin() superadmin: any,
   ) {
-    this.superadminService.logger.info(
-      `Super admin ${superadmin.email} creating admin account for ${createAdminDto.email}`,
-    );
     return this.superadminService.createAdmin(createAdminDto);
   }
 }
