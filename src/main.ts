@@ -19,9 +19,30 @@ async function bootstrap() {
   });
 
   // Configure CORS properly - allow credentials with specific origin
+  // Support both http and https for the frontend domain
   const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+  const frontendDomain = configService.get<string>('FRONTEND_DOMAIN');
+  
+  // Build allowed origins list - include both http and https if domain is provided
+  const allowedOrigins: string[] = [frontendUrl];
+  if (frontendDomain && !frontendUrl.includes('localhost')) {
+    // Add both http and https versions of the domain
+    allowedOrigins.push(`http://${frontendDomain}`);
+    allowedOrigins.push(`https://${frontendDomain}`);
+  }
+  
   app.enableCors({
-    origin: frontendUrl,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) {
+        return callback(null, true);
+      }
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

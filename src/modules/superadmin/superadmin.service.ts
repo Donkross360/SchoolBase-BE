@@ -17,9 +17,18 @@ import { EmailTemplateID } from 'src/constants/email-constants';
 
 import config from '../../config/config';
 import * as sysMsg from '../../constants/system.messages';
+import { AccountCreationService } from '../email/account-creation.service';
 import { EmailService } from '../email/email.service';
 import { SchoolModelAction } from '../school/model-actions/school.action';
+import { UserRole } from '../shared/enums';
+import {
+  generateResetToken,
+  generateStrongPassword,
+  hashPassword,
+} from '../shared/utils';
+import { UserModelAction } from '../user/model-actions/user-actions';
 
+import { CreateAdminDto } from './dto/create-admin.dto';
 import { CreateSuperadminDto } from './dto/create-superadmin.dto';
 import { LoginSuperadminDto } from './dto/login-superadmin.dto';
 import { LogoutDto } from './dto/superadmin-logout.dto';
@@ -40,6 +49,10 @@ export class SuperadminService {
     private readonly superadminSessionService: SuperadminSessionService,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => UserModelAction))
+    private readonly userModelAction: UserModelAction,
+    @Inject(forwardRef(() => AccountCreationService))
+    private readonly accountCreationService: AccountCreationService,
   ) {
     this.logger = logger.child({ context: SuperadminService.name });
   }
@@ -275,6 +288,91 @@ export class SuperadminService {
     return {
       status_code: HttpStatus.OK,
       message: sysMsg.LOGOUT_SUCCESS,
+    };
+  }
+
+  /**
+   * Creates an admin user account
+   * @param createAdminDto - Admin account details
+   */
+  async createAdmin(createAdminDto: CreateAdminDto) {
+    // Check if user with email already exists
+    const existingUser = await this.userModelAction.get({
+      identifierOptions: { email: createAdminDto.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException(
+        `User with email ${createAdminDto.email} already exists.`,
+      );
+    }
+
+    // Generate password if not provided
+    const rawPassword = createAdminDto.password || generateStrongPassword(12);
+    const hashedPassword = await hashPassword(rawPassword);
+
+    // Generate reset token for password reset link
+    const { resetToken, resetTokenExpiry } = generateResetToken(24);
+
+    // Create user account
+    const savedUser = await this.dataSource.transaction(async (manager) => {
+      return await this.userModelAction.create({
+        createPayload: {
+          first_name: createAdminDto.first_name,
+          last_name: createAdminDto.last_name,
+          email: createAdminDto.email,
+          phone: createAdminDto.phone || '',
+          gender: 'OTHER', // Default since not provided
+          dob: new Date().toISOString().split('T')[0], // Default to today
+          password: hashedPassword,
+          role: [UserRole.ADMIN],
+          is_active: true,
+          is_verified: true,
+          reset_token: resetToken,
+          reset_token_expiry: resetTokenExpiry,
+        },
+        transactionOptions: {
+          useTransaction: true,
+          transaction: manager,
+        },
+      });
+    });
+
+    this.logger.info('Admin account created', {
+      adminId: savedUser.id,
+      email: savedUser.email,
+    });
+
+    // Send account creation email
+    try {
+      await this.accountCreationService.sendAccountCreationEmail(
+        `${savedUser.first_name} ${savedUser.last_name}`,
+        savedUser.email,
+        rawPassword,
+        UserRole.ADMIN,
+        resetToken,
+      );
+    } catch (emailError) {
+      // Log email error but don't throw - admin has already been created
+      this.logger.warn(
+        `Failed to send account creation email for admin ${savedUser.id} (${savedUser.email}). Admin account was created successfully.`,
+        emailError,
+      );
+    }
+
+    return {
+      message: 'Admin account created successfully',
+      status_code: HttpStatus.CREATED,
+      data: {
+        id: savedUser.id,
+        first_name: savedUser.first_name,
+        last_name: savedUser.last_name,
+        email: savedUser.email,
+        phone: savedUser.phone,
+        is_active: savedUser.is_active,
+        is_verified: savedUser.is_verified,
+        created_at: savedUser.createdAt,
+      },
     };
   }
 }
