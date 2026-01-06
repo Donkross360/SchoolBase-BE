@@ -13,7 +13,7 @@ import { Teacher } from '../../teacher/entities/teacher.entity';
 interface IJwtPayload {
   sub: string;
   email: string;
-  role: UserRole[];
+  role?: UserRole[]; // Optional - super admin tokens don't have role
 }
 
 @Injectable()
@@ -34,6 +34,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: IJwtPayload) {
+    // Handle tokens without role (e.g., super admin tokens)
+    const roles = payload.role || [];
+
     const userData: {
       id: string;
       userId: string;
@@ -46,11 +49,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       id: payload.sub,
       userId: payload.sub,
       email: payload.email,
-      roles: payload.role,
+      roles: roles,
     };
 
     // If user has TEACHER role, fetch teacher_id
-    if (payload.role.includes(UserRole.TEACHER)) {
+    if (roles.includes(UserRole.TEACHER)) {
       const teacher = await this.teacherRepository.findOne({
         where: { user_id: payload.sub },
         select: ['id'],
@@ -61,7 +64,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // If user has STUDENT role, fetch student_id
-    if (payload.role.includes(UserRole.STUDENT)) {
+    if (roles.includes(UserRole.STUDENT)) {
       const student = await this.studentRepository.findOne({
         where: { user: { id: payload.sub } },
         select: ['id'],
@@ -72,7 +75,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // If user has PARENT role, fetch parent_id
-    if (payload.role.includes(UserRole.PARENT)) {
+    if (roles.includes(UserRole.PARENT)) {
       const parent = await this.parentRepository.findOne({
         where: { user_id: payload.sub },
         select: ['id'],
