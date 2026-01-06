@@ -62,6 +62,7 @@ export class SuperadminController {
 
   @Post('admins')
   @UseGuards(SuperadminAuthGuard)
+  @RateLimit({ maxRequests: 20, windowMs: 15 * 60 * 1000 }) // More lenient limit for authenticated admin creation
   @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
   async createAdmin(
