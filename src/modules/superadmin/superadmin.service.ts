@@ -292,6 +292,36 @@ export class SuperadminService {
   }
 
   /**
+   * Gets the current super admin's profile
+   * @param superadminId - Super admin ID
+   */
+  async getMe(superadminId: string) {
+    const superadmin = await this.superadminModelAction.get({
+      identifierOptions: { id: superadminId },
+    });
+
+    if (!superadmin) {
+      throw new UnauthorizedException('Super admin not found');
+    }
+
+    return {
+      message: 'Super admin profile retrieved successfully',
+      status_code: HttpStatus.OK,
+      data: {
+        id: superadmin.id,
+        email: superadmin.email,
+        first_name: superadmin.first_name,
+        last_name: superadmin.last_name,
+        school_name: superadmin.school_name,
+        is_active: superadmin.is_active,
+        role: superadmin.role,
+        created_at: superadmin.createdAt,
+        updated_at: superadmin.updatedAt,
+      },
+    };
+  }
+
+  /**
    * Creates an admin user account
    * @param createAdminDto - Admin account details
    */

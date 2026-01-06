@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   UseGuards,
   HttpCode,
@@ -49,6 +50,14 @@ export class SuperadminController {
   @HttpCode(HttpStatus.OK)
   async logout(@Body() logoutDto: LogoutDto) {
     return this.superadminService.logout(logoutDto);
+  }
+
+  @Get('me')
+  @UseGuards(SuperadminAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  async getMe(@CurrentSuperadmin() superadmin: any) {
+    return this.superadminService.getMe(superadmin.id);
   }
 
   @Post('admins')
