@@ -275,12 +275,35 @@ export class SuperadminService {
    * logs out a logged on superadmin
    */
   async logout(logoutDto: LogoutDto) {
-    if (this.superadminSessionService) {
-      // follow the same parameter order used in AuthService tests (superadmin_id, session_id)
-      await this.superadminSessionService.revokeSession(
-        logoutDto.session_id,
-        logoutDto.user_id,
-      );
+    if (this.superadminSessionService && logoutDto.session_id && logoutDto.user_id) {
+      try {
+        // follow the same parameter order used in AuthService tests (superadmin_id, session_id)
+        const result = await this.superadminSessionService.revokeSession(
+          logoutDto.session_id,
+          logoutDto.user_id,
+        );
+        
+        if (!result.revoked) {
+          this.logger.warn('Session revocation returned false', {
+            session_id: logoutDto.session_id,
+            user_id: logoutDto.user_id,
+            result,
+          });
+        }
+      } catch (error) {
+        // Log error but don't fail logout - cookies will be cleared anyway
+        this.logger.warn('Error revoking session during logout', {
+          error: error instanceof Error ? error.message : String(error),
+          session_id: logoutDto.session_id,
+          user_id: logoutDto.user_id,
+        });
+      }
+    } else {
+      this.logger.debug('Skipping session revocation - session service not available or missing session/user ID', {
+        hasSessionService: !!this.superadminSessionService,
+        hasSessionId: !!logoutDto.session_id,
+        hasUserId: !!logoutDto.user_id,
+      });
     }
 
     this.logger.info(sysMsg.LOGOUT_SUCCESS);

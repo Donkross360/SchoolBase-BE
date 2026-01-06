@@ -1,20 +1,20 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsUUID } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsUUID } from 'class-validator';
 
 export class LogoutDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'session-id-123',
     description: 'session id',
   })
   @IsUUID()
-  @IsNotEmpty()
-  session_id: string;
+  @IsOptional()
+  session_id?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'user-id-123',
     description: 'User id',
   })
   @IsUUID()
-  @IsNotEmpty()
-  user_id: string;
+  @IsOptional()
+  user_id?: string;
 }

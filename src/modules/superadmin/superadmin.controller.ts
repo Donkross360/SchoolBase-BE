@@ -54,6 +54,7 @@ export class SuperadminController {
 
   @Get('me')
   @UseGuards(SuperadminAuthGuard)
+  @RateLimit({ maxRequests: 30, windowMs: 15 * 60 * 1000 }) // Higher limit for frequently called authenticated endpoint
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   async getMe(@CurrentSuperadmin() superadmin: any) {
