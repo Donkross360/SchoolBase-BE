@@ -144,13 +144,27 @@ export class StudentService {
       },
     );
 
-    await this.accountCreationService.sendAccountCreationEmail(
-      `${savedUser.first_name} ${savedUser.last_name}`,
-      savedUser.email,
-      createStudentDto.password,
-      UserRole.STUDENT,
-      resetToken,
-    );
+    // Attempt to send email, but don't fail the operation if it fails
+    try {
+      await this.accountCreationService.sendAccountCreationEmail(
+        `${savedUser.first_name} ${savedUser.last_name}`,
+        savedUser.email,
+        createStudentDto.password,
+        UserRole.STUDENT,
+        resetToken,
+      );
+    } catch (emailError) {
+      // Log email error but don't throw - student has already been created
+      this.logger.warn(
+        `Failed to send account creation email for student ${savedStudent.id} (${savedUser.email}). Student account was created successfully.`,
+        {
+          error: emailError instanceof Error ? emailError.message : String(emailError),
+          stack: emailError instanceof Error ? emailError.stack : undefined,
+          studentId: savedStudent.id,
+          email: savedUser.email,
+        },
+      );
+    }
 
     return new StudentResponseDto(
       savedStudent,

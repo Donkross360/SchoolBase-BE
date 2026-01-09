@@ -53,7 +53,7 @@ export class InviteService {
   }
 
   async inviteUser(inviteUserDto: InviteUserDto) {
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       // Check if user already exists
       const existingUser = await this.userModelAction.get({
         identifierOptions: {
@@ -128,17 +128,36 @@ export class InviteService {
         });
       }
 
-      // Send invitation email
-      await this.sendInvitationEmail(inviteUserDto, token);
-
       return {
         id: savedInvite.id,
         email: savedInvite.email,
         invited_at: savedInvite.invited_at || savedInvite.createdAt,
         role: savedInvite.role,
         full_name: savedInvite.full_name,
+        token, // Return token so we can send email outside transaction
       };
     });
+
+    // Send invitation email outside transaction
+    // If email fails, invite is still created (user can resend invite)
+    try {
+      await this.sendInvitationEmail(inviteUserDto, result.token);
+    } catch (emailError) {
+      // Log email error but don't throw - invite has already been created
+      this.logger.warn(
+        `Failed to send invitation email for invite ${result.id} (${inviteUserDto.email}). Invite was created successfully.`,
+        {
+          error: emailError instanceof Error ? emailError.message : String(emailError),
+          stack: emailError instanceof Error ? emailError.stack : undefined,
+          inviteId: result.id,
+          email: inviteUserDto.email,
+        },
+      );
+    }
+
+    // Remove token from response for security
+    delete result.token;
+    return result;
   }
 
   private async sendInvitationEmail(inviteDto: InviteUserDto, token: string) {
